@@ -333,6 +333,43 @@ class ChooseIconDialog(QtGui.QDialog):
 #      text = entry.label + "\n" + timeText
 #      self.setText(text)
 #      
+
+class EntryListTItem(QtGui.QTableWidgetItem):
+   def __init__(self, entry=None, parent=None, iconSize=48):
+      QtGui.QTableWidgetItem.__init__(self)
+      
+      self.setTextAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop)
+      
+      self.iconSize = iconSize
+      self.parent = parent
+      
+      if not entry: return
+      if entry.icon is not None: self.setIcon(entry.icon)
+      self.entry = entry
+      self.UpdateText()
+      
+      self.entry.UpdateButton.connect(self.UpdateText)
+      
+   def parent(self):
+      return self.parent if self.parent else None
+      
+   def UpdateIcon(self):
+      self.setIcon(self.entry.icon)
+      
+   def UpdateText(self):
+      entry = self.entry
+      if entry.running: timeText = "Currently running..."
+      else:
+         if entry.totalTime == 0.: timeText ="Never played"
+         elif entry.totalTime < 60.: timeText = "<1m played"
+         elif entry.totalTime < 20.*60: timeText = "%im %is played" % (entry.totalTime//60, entry.totalTime%60)
+         elif entry.totalTime < 60.*60: timeText = "%im played" % (entry.totalTime//60)
+         elif entry.totalTime < 20.*60*60: timeText = "%ih %im played" %  (entry.totalTime//3600, (entry.totalTime%3600)//60)
+         elif entry.totalTime < 200.*60*60: timeText = "%ih played" % (entry.totalTime//3600)
+         else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
+      text = entry.label + "\n" + timeText
+      self.setText(text)
+
 class EntryListItem(QtGui.QListWidgetItem):
    def __init__(self, entry=None, parent=None, iconSize=48):
       QtGui.QListWidgetItem.__init__(self, parent)
@@ -402,11 +439,101 @@ class EntryMenu(QtGui.QMenu):
          self.renameAction.triggered.connect(self.parent().RenameItem)
          self.removeAction.triggered.connect(self.parent().RemoveItem)
 
+class CategoryTWidget(QtGui.QTableWidget):
+   ProfileChanged = pyqtSignal()
+   
+   def __init__(self, iconSize = 48):
+      QtGui.QTableWidget.__init__(self, 6, 6)
+      
+      # layout/design initialization 
+      self.iconSize = iconSize
+      self.contextMenu = EntryMenu(self)
+      self.count = 0
+      
+      self.setVerticalHeaderItem(1, QtGui.QTableWidgetItem(""))
+      
+      self.clearSelection()
+      
+      style  = "QTableView { background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; }"\
+             + "QTableView::item { border: 1px solid rgba(0,0,0,0%); }"\
+             + "QTableView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
+             + "QTableView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
+      self.setStyleSheet(style)
+      
+      # connections
+      self.itemDoubleClicked.connect(self.RunItem)
+
+   def contextMenuEvent(self, e):
+      lwitem = self.itemAt(e.pos())
+      if lwitem is not None:
+         self.contextMenu.exec_(e.globalPos())
+         
+   def dropEvent(self, e):
+      QtGui.QListView.dropEvent(self, e)
+      
+      item = self.itemAt(e.pos())
+      if item is not None:
+         #newpos = (r.top()/self.gridSize().height(), r.left()/self.gridSize().width())
+         newpos = ( item.row(), item.col() )
+         if newpos != item.entry.position:
+            item.entry.position = newpos
+            self.ProfileChanged.emit()
+         
+   def mousePressEvent(self, e):
+      if self.itemAt(e.pos()) is None:
+         self.clearSelection()
+         
+      QtGui.QAbstractItemView.mousePressEvent(self, e)
+
+   def AddEntry(self, entry):
+      e = EntryListTItem(entry=entry, parent=self, iconSize=self.iconSize)
+      
+      pos = self.count//self.columnCount(), self.count%self.columnCount()
+      self.setItem(pos[0], pos[1], e)
+      e.entry.position = pos
+      
+      self.count += 1
+      
+   def ChooseIconForItem(self):
+      item = self.currentItem()
+      if not item: return
+      dlg = ChooseIconDialog(self, file=item.entry.filename, suggestions=True)
+      result = dlg.exec_()
+      
+      if result == None: return
+      else:
+         path, id = result
+         item.entry.iconPath = path
+         item.entry.preferredIcon = id
+         item.entry.LoadIcon()
+         item.UpdateIcon()
+         item.entry.UpdateProfile.emit()
+         
+   def RemoveItem(self):
+      item = self.currentItem()
+      if not item: return
+      
+      self.parent().RemoveItemT(item.entry, item.row(), item.column())
+
+   def RenameItem(self):
+      item = self.currentItem()
+      if not item: return
+      entry = item.entry
+      
+      text, accepted = QtGui.QInputDialog.getText(self, "Rename %s" % entry.label, "Please enter new name:", text=entry.label)
+      if accepted:
+         entry.label = text
+         item.UpdateText()
+         item.entry.UpdateProfile.emit()
+         
+   def RunItem(self,item):
+      item.entry.Run()
+
 class CategoryWidget(QtGui.QListWidget):
    ProfileChanged = pyqtSignal()
    
    def __init__(self, iconSize = 48):
-      QtGui.QWidget.__init__(self)
+      QtGui.QListWidget.__init__(self)
       
       # layout/design initialization 
       self.iconSize = iconSize
@@ -420,7 +547,7 @@ class CategoryWidget(QtGui.QListWidget):
       self.setSpacing(20)
       self.setIconSize(size)
       self.setGridSize(size+textSize+spacing)
-      self.setMovement(QtGui.QListView.Snap)
+      self.setMovement(QtGui.QListView.Static)
       #self.setResizeMode(QtGui.QListView.Adjust)
       
       self.setUniformItemSizes(True)
@@ -589,6 +716,27 @@ class MainWidget(QtGui.QWidget):
       
       for wdg in self.catWidgets.values():
          i = wdg.takeItem(row)
+         del i
+      
+      self.parent().SaveProfile()
+      
+   def RemoveItemT(self, entry, row, col):
+      msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, "Warning: Deleting entry", "Do you really want to remove this entry? All"+\
+                              " information and playtime will be lost and can not be restored!", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
+      result = msg.exec_()
+      if result == QtGui.QMessageBox.Cancel: return
+      
+      # find entry
+      try:
+         index = self.entries.index(entry)
+      except ValueError:
+         raise ValueError("Tried to remove entry from main widget's entry list, but it is not present!")
+      
+      # delete entry
+      self.entries.pop(index)
+      
+      for wdg in self.catWidgets.values():
+         i = wdg.takeItem(row,col)
          del i
       
       self.parent().SaveProfile()
