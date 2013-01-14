@@ -369,34 +369,20 @@ class EntryListTItem(QtGui.QTableWidgetItem):
          else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
       text = entry.label + "\n" + timeText
       self.setText(text)
-
-class EntryListItem(QtGui.QListWidgetItem):
+      
+class EntryItem(QtGui.QListWidgetItem):
+   """ Base class for entry items, independent of whether they are in list or icon view mode """
    def __init__(self, entry=None, parent=None, iconSize=48):
       QtGui.QListWidgetItem.__init__(self, parent)
       
-      self.setTextAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop)
-      
       self.iconSize = iconSize
       self.parent = parent
-      
-      # init icon
-      #self.setAutoRaise(True)
-      
-      # this is done in parent list widget already
-      #self.setIconSize(QtCore.QSize(self.iconSize,self.iconSize))
-      #self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon if self.iconSize > 16 else Qt.ToolButtonTextBesideIcon)
-      
-      # init menu
-      #self.setPopupMode(QtGui.QToolButton.MenuButtonPopup)
       
       if not entry: return
       if entry.icon is not None: self.setIcon(entry.icon)
       self.entry = entry
       self.UpdateText()
       
-      #self.contextMenu = EntryMenu(self.entry, self.parent)
-      
-      #self.clicked.connect(entry.Run)
       self.entry.UpdateButton.connect(self.UpdateText)
       
    def parent(self):
@@ -416,9 +402,25 @@ class EntryListItem(QtGui.QListWidgetItem):
          elif entry.totalTime < 20.*60*60: timeText = "%ih %im played" %  (entry.totalTime//3600, (entry.totalTime%3600)//60)
          elif entry.totalTime < 200.*60*60: timeText = "%ih played" % (entry.totalTime//3600)
          else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
-      text = entry.label + "\n" + timeText
+      text = entry.label + ("\n" + timeText if self.showPlaytime else "")
       self.setText(text)
-
+      
+class EntryListItem(EntryItem):
+   """ Specific entry item for list view """
+   def __init__(self, entry=None, parent=None, iconSize=48):
+      self.showPlaytime = False
+      
+      EntryItem.__init__(self, entry, parent, iconSize)
+      self.setTextAlignment(QtCore.Qt.AlignLeft)
+      
+class EntryIconItem(EntryItem):
+   """ Specific entry item for icon view """
+   def __init__(self, entry=None, parent=None, iconSize=48):
+      self.showPlaytime = True
+      
+      EntryItem.__init__(self, entry, parent, iconSize)
+      self.setTextAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop)
+      
 class EntryMenu(QtGui.QMenu):
    def __init__(self, parent=None):
       QtGui.QMenu.__init__(self, parent)
@@ -528,37 +530,16 @@ class CategoryTWidget(QtGui.QTableWidget):
          
    def RunItem(self,item):
       item.entry.Run()
+      
 
 class CategoryWidget(QtGui.QListWidget):
    ProfileChanged = pyqtSignal()
    
-   def __init__(self, iconSize = 48):
-      QtGui.QListWidget.__init__(self)
+   def __init__(self, parent=None, iconSize = 48):
+      QtGui.QListWidget.__init__(self, parent)
       
-      # layout/design initialization 
       self.iconSize = iconSize
       self.contextMenu = EntryMenu(self)
-      
-      size = QtCore.QSize(iconSize,iconSize)
-      textSize = QtCore.QSize(0, 33)
-      spacing = QtCore.QSize(20,20)
-      
-      self.setViewMode(QtGui.QListView.IconMode)
-      self.setSpacing(20)
-      self.setIconSize(size)
-      self.setGridSize(size+textSize+spacing)
-      self.setMovement(QtGui.QListView.Static)
-      #self.setResizeMode(QtGui.QListView.Adjust)
-      
-      self.setUniformItemSizes(True)
-      
-      self.clearSelection()
-      
-      style  = "QListView { background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; }"\
-             + "QListView::item { border: 1px solid rgba(0,0,0,0%); }"\
-             + "QListView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
-             + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
-      self.setStyleSheet(style)
       
       # connections
       self.itemDoubleClicked.connect(self.RunItem)
@@ -586,11 +567,8 @@ class CategoryWidget(QtGui.QListWidget):
       QtGui.QAbstractItemView.mousePressEvent(self, e)
 
    def AddEntry(self, entry):
-      e = EntryListItem(entry=entry, parent=self, iconSize=self.iconSize)
-      e.setSizeHint(self.gridSize())
-      r = self.visualItemRect(e)
-      pos = (r.top()/self.gridSize().height(), r.left()/self.gridSize().width())
-      e.entry.position = pos
+      """ Abstract method, please reimplement in subclasses to add entries to the list. """
+      raise NotImplementedError('Call to abstract class method \'AddEntry\' in EntryItem-object.')
       
    def ChooseIconForItem(self):
       item = self.currentItem()
@@ -612,7 +590,7 @@ class CategoryWidget(QtGui.QListWidget):
       if not item: return
       
       self.parent().RemoveItem(item.entry, self.row(item))
-
+      
    def RenameItem(self):
       item = self.currentItem()
       if not item: return
@@ -626,7 +604,159 @@ class CategoryWidget(QtGui.QListWidget):
          
    def RunItem(self,item):
       item.entry.Run()
+      
+class CategoryListWidget(CategoryWidget):
+   def __init__(self, parent=None, iconSize = 16):
+      CategoryWidget.__init__(self, parent, iconSize)
+      
+      # layout/design initialization
+      self.setViewMode(QtGui.QListView.ListMode)
+      
+      size = QtCore.QSize(iconSize,iconSize)
+      
+      self.setIconSize(size)
+      self.setMovement(QtGui.QListView.Static)
+      
+      style  = "QListView { background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; }"\
+             + "QListView::item { border: 1px solid rgba(0,0,0,0%); }"\
+             + "QListView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
+             + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
+      #self.setStyleSheet(style)
+      
+   def AddEntry(self, entry):
+      e = EntryListItem(entry=entry, parent=self, iconSize=self.iconSize)
 
+class CategoryIconWidget(CategoryWidget):
+   def __init__(self, parent=None, iconSize = 128):
+      CategoryWidget.__init__(self, parent, iconSize)
+            
+      # layout/design initialization 
+      size = QtCore.QSize(iconSize,iconSize)
+      textSize = QtCore.QSize(0, 33)
+      spacing = QtCore.QSize(20,20)
+      
+      self.setViewMode(QtGui.QListView.IconMode)
+      self.setSpacing(20)
+      self.setIconSize(size)
+      self.setGridSize(size+textSize+spacing)
+      self.setMovement(QtGui.QListView.Static)
+      #self.setResizeMode(QtGui.QListView.Adjust)
+      
+      self.setUniformItemSizes(True)
+      
+      self.clearSelection()
+      
+      style  = "QListView { background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; }"\
+             + "QListView::item { border: 1px solid rgba(0,0,0,0%); }"\
+             + "QListView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
+             + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
+      self.setStyleSheet(style)
+      
+   def AddEntry(self, entry):
+      e = EntryIconItem(entry=entry, parent=self, iconSize=self.iconSize)
+
+class DetailsWidget(QtGui.QWidget):
+   """ Shows detailed information on an entry, such as a large icon, its title and playtime """
+   def __init__(self, parent=None, entry=None):
+      QtGui.QWidget.__init__(self, parent)
+      self.entry = entry
+      
+      # init labels
+      nameFont = QtGui.QFont("Calibri", 20, QtGui.QFont.Bold)
+      self.nameLabel = QtGui.QLabel("Unknown application")
+      self.nameLabel.setFont(nameFont)
+      
+      timeFont = QtGui.QFont("Calibri", 12, italic=True)
+      self.playtimeLabel = QtGui.QLabel("Never played")
+      self.playtimeLabel.setFont(timeFont)
+      picture = QtGui.QPixmap("noicon.png")
+      self.pictureLabel = QtGui.QLabel()
+      self.pictureLabel.setPixmap(picture)
+   
+      if self.entry is not None: self.SetEntry(entry)
+   
+      # init layout
+      lay = QtGui.QHBoxLayout()
+      
+      layV = QtGui.QVBoxLayout()
+      
+      layV.addStretch(1)
+      layV.addWidget(self.nameLabel, 0, QtCore.Qt.AlignVCenter)
+      layV.addWidget(self.playtimeLabel, 0, QtCore.Qt.AlignVCenter)
+      layV.addStretch(1)
+      
+      lay.addWidget(self.pictureLabel)
+      lay.addLayout(layV)
+      
+      self.setLayout(lay)
+      
+      
+   def SetEntry(self, entry):
+      self.entry = entry
+      self.nameLabel.setText(entry.label)
+      picture = entry.icon.pixmap(256,256)
+      self.pictureLabel.setPixmap(picture)
+      self.UpdateText()
+      
+   def UpdateText(self):
+      entry = self.entry
+      if entry.running: timeText = "Currently running..."
+      else:
+         if entry.totalTime == 0.: timeText ="Never played"
+         elif entry.totalTime < 60.: timeText = "<1m played"
+         elif entry.totalTime < 20.*60: timeText = "%im %is played" % (entry.totalTime//60, entry.totalTime%60)
+         elif entry.totalTime < 60.*60: timeText = "%im played" % (entry.totalTime//60)
+         elif entry.totalTime < 20.*60*60: timeText = "%ih %im played" %  (entry.totalTime//3600, (entry.totalTime%3600)//60)
+         elif entry.totalTime < 200.*60*60: timeText = "%ih played" % (entry.totalTime//3600)
+         else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
+      self.playtimeLabel.setText(timeText)
+      
+class CategoryListAndDetailsWidget(QtGui.QWidget):
+   ProfileChanged = pyqtSignal()
+   
+   def __init__(self, parent=None):
+      QtGui.QWidget.__init__(self, parent)
+      
+      # init layout
+      lay = QtGui.QHBoxLayout()
+      
+      self.catWdg = CategoryListWidget(self)
+      self.detWdg = DetailsWidget(self)
+      
+      lay.addWidget(self.catWdg)
+      lay.addWidget(self.detWdg, 1, QtCore.Qt.AlignTop ) # higher stretch
+      
+      self.setLayout(lay)
+      
+      # connect widgets
+      self.catWdg.ProfileChanged.connect(self.ProfileChangedSlot)
+      self.catWdg.currentItemChanged.connect(self.CurrentItemChanged)
+      
+      # set stylesheet
+      style  = " background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; "\
+             + "QLabel { color: white; }"\
+             + "QListView { color: white; }"\
+      #       + "QListView::item { border: 1px solid rgba(0,0,0,0%); }"\
+      #       + "QListView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
+      #       + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
+      #self.setStyleSheet(style)
+   
+   def takeItem(self, row):
+      return self.catWdg.takeItem(row)
+      
+   def AddEntry(self, entry):
+      self.catWdg.AddEntry(entry)
+      
+   def CurrentItemChanged(self, item):
+      self.detWdg.SetEntry(item.entry)
+      
+   def ProfileChangedSlot(self):
+      # just pass this signal on
+      self.ProfileChanged.emit()
+      
+   def RemoveItem(self, item, row):
+      self.parent().RemoveItem(item, row)
+      
 class MainWidget(QtGui.QWidget):
    def __init__(self, parent=None):
       QtGui.QWidget.__init__(self, parent)
@@ -666,7 +796,8 @@ class MainWidget(QtGui.QWidget):
       self.catWidgets = {}
       self.catWidgetIndices = {}
       for iconSize in (16,32,48,128,256):
-         wdg = CategoryWidget(iconSize)
+         if iconSize == 16: wdg = CategoryListAndDetailsWidget(self)
+         else: wdg = CategoryIconWidget(self, iconSize)
          self.catWidgets[iconSize] = wdg
          self.catWidgetIndices[iconSize] = self.layout().addWidget(wdg)
          wdg.ProfileChanged.connect(self.parent().SaveProfile)
@@ -691,7 +822,7 @@ class MainWidget(QtGui.QWidget):
       
       entry = AppStarterEntry(file, self)
       try:
-         entry.LoadIcon(self.iconSize)
+         entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
       except IOError:
          QtGui.QMessageBox.warning(self, "Warning", "No icon found in '%s.'" % file)
          entry.preferredIcon = -1
