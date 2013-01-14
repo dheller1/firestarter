@@ -783,6 +783,10 @@ class MainWindow(QtGui.QMainWindow):
       self.profile = os.environ.get("USERNAME")
       self.LoadProfile()
       
+   def __del__(self):
+      print "Saving profile prior to closing program..."
+      self.SaveProfile()
+      
    def moveEvent(self, e):
       if e.oldPos() != e.pos():
          self.SaveProfile()
@@ -821,6 +825,9 @@ class MainWindow(QtGui.QMainWindow):
             self.resize(size[0], size[1])
             pos = pickle.load(f)
             self.move(pos[0],pos[1])
+            
+            toolsVisible = pickle.load(f)
+            self.toolsBar.setVisible(toolsVisible)
          except:
             QtGui.QMessageBox.critical(self, "Error", "Invalid profile '%s'!" % filename)
             return
@@ -840,7 +847,7 @@ class MainWindow(QtGui.QMainWindow):
                
                self.centralWidget().AddEntry(entry)
             except EOFError: QtGui.QMessageBox.critical(self, "Error", "Unable to load entry %i from profile '%s'!\nEntries might be incomplete." % (i+1, filename))
-         
+   
    def SaveProfile(self, filename=None):
       if filename is None: filename = '%s.dat' % self.profile
       
@@ -850,6 +857,7 @@ class MainWindow(QtGui.QMainWindow):
          pickle.dump(len(self.centralWidget().entries), f)   # write number of entries
          pickle.dump( (self.size().width() , self.size().height() ), f) # write window size
          pickle.dump( (self.x(),self.y()), f)                # write window position
+         pickle.dump( self.toolsBar.isVisible(), f)          # write if tools toolbar is visible
          for entry in self.centralWidget().entries:
             entry.ExportToFile(f)
          
