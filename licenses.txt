@@ -1,0 +1,5 @@
+This program contains media from the following sources:
+
+
+http://www.oxygen-icons.org/ - LGPL - http://www.iconarchive.com/show/oxygen-icons-by-oxygen-icons.org/Actions-arrow-up-icon.html
+http://www.oxygen-icons.org/ - LGPL - http://www.iconarchive.com/show/oxygen-icons-by-oxygen-icons.org/Actions-arrow-down-icon.html

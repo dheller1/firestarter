@@ -515,8 +515,8 @@ class CategoryIconWidget(CategoryWidget):
       
       self.clearSelection()
       
-      style  = "QListView { background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; }"\
-             + "QListView::item { border: 1px solid rgba(0,0,0,0%); }"\
+      style  = "QListView { background-image: url(wood-texture.jpg); background-attachment: fixed; }"\
+             + "QListView::item { color: white; border: 1px solid rgba(0,0,0,0%); }"\
              + "QListView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
              + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
       self.setStyleSheet(style)
@@ -611,6 +611,24 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       #       + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
       #self.setStyleSheet(style)
    
+   def count(self):
+      return self.catWdg.count()
+   
+   def currentRow(self):
+      return self.catWdg.currentRow()
+   
+   def insertItem(self, row, item):
+      return self.catWdg.insertItem(row, item)
+   
+   def item(self, row):
+      return self.catWdg.item(row)
+   
+   def row(self, item):
+      return self.catWdg.row(item)
+   
+   def setCurrentRow(self, row):
+      return self.catWdg.setCurrentRow(row)
+   
    def takeItem(self, row):
       return self.catWdg.takeItem(row)
       
@@ -676,7 +694,40 @@ class MainWidget(QtGui.QWidget):
          self.catWidgetIndices[iconSize] = self.layout().addWidget(wdg)
          wdg.ProfileChanged.connect(self.parent().SaveProfile)
          
-      self.layout().setCurrentIndex(self.catWidgetIndices[self.iconSize])
+      self.SetIconSize(self.iconSize)
+      
+   def MoveItemUp(self):
+      row = self.activeCatWdg.currentRow()
+      if row == 0: return
+      self.SwapItems(row, row-1)
+      self.activeCatWdg.setCurrentRow(row-1)
+      
+   def MoveItemDown(self):
+      row = self.activeCatWdg.currentRow()
+      if row == self.activeCatWdg.count()-1: return
+      self.SwapItems(row, row+1)
+      self.activeCatWdg.setCurrentRow(row+1)
+      
+   def SwapItems(self, id_a, id_b):
+      e_a = self.entries[id_a]
+      e_b = self.entries[id_b]
+      
+      self.entries[id_a] = e_b
+      self.entries[id_b] = e_a
+      
+      for wdg in self.catWidgets.values():
+         itm_a = wdg.item(id_a)
+         itm_b = wdg.item(id_b)
+         
+         wdg.takeItem(wdg.row(itm_a))
+         wdg.takeItem(wdg.row(itm_b))
+         
+         if id_a < id_b:
+            wdg.insertItem(id_a, itm_b)
+            wdg.insertItem(id_b, itm_a)
+         else:
+            wdg.insertItem(id_b, itm_a)
+            wdg.insertItem(id_a, itm_b)
       
    def ParseUrl(self, url):
       file = unicode(url.toLocalFile())
@@ -749,6 +800,30 @@ class MainWidget(QtGui.QWidget):
    def SetIconSize(self, size):
       self.iconSize = size
       self.layout().setCurrentIndex(self.catWidgetIndices[size])
+      self.activeCatWdg = self.catWidgets[size]
+      
+class ToolsToolbar(QtGui.QToolBar):
+   def __init__(self, parent=None):
+      QtGui.QToolBar.__init__(self, "Tools", parent)
+      
+      # init children
+      self.iconSizeComboBox = IconSizeComboBox()
+      self.upBtn = QtGui.QPushButton()
+      self.upBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "Actions-arrow-up-icon.png")))
+      
+      self.downBtn = QtGui.QPushButton()
+      self.downBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "Actions-arrow-down-icon.png")))
+      
+      # init layout
+      dwWdg = QtGui.QWidget(self)
+      dwWdg.setLayout(QtGui.QHBoxLayout())
+      
+      dwWdg.layout().addStretch(1)
+      dwWdg.layout().addWidget(self.upBtn)
+      dwWdg.layout().addWidget(self.downBtn)
+      dwWdg.layout().addWidget(self.iconSizeComboBox)
+      
+      self.addWidget(dwWdg)
 
 class MainWindow(QtGui.QMainWindow):
    def __init__(self):
@@ -761,19 +836,9 @@ class MainWindow(QtGui.QMainWindow):
       
       self.setCentralWidget(MainWidget(self))
       
-      
       # init toolbar
-      tb = QtGui.QToolBar("Tools", self)
-      self.iconSizeComboBox = IconSizeComboBox()
-      
-      dwWdg = QtGui.QWidget(tb)
-      dwWdg.setLayout(QtGui.QHBoxLayout())
-      dwWdg.layout().addStretch(1)
-      dwWdg.layout().addWidget(self.iconSizeComboBox)
-      tb.addWidget(dwWdg)
-      
-      self.toolsBar = tb
-      self.addToolBar(tb)
+      self.toolsBar = ToolsToolbar(self)
+      self.addToolBar(self.toolsBar)
       
       # init menus and connections
       self.InitMenus()
@@ -802,7 +867,9 @@ class MainWindow(QtGui.QMainWindow):
          self.SaveProfile()
       
    def InitConnections(self):
-      self.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)
+      self.toolsBar.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)
+      self.toolsBar.upBtn.clicked.connect(self.centralWidget().MoveItemUp)
+      self.toolsBar.downBtn.clicked.connect(self.centralWidget().MoveItemDown)
    
    def InitMenus(self):
       self.settingsMenu = SettingsMenu(self, self.centralWidget().iconSize)
@@ -857,7 +924,8 @@ class MainWindow(QtGui.QMainWindow):
          pickle.dump(len(self.centralWidget().entries), f)   # write number of entries
          pickle.dump( (self.size().width() , self.size().height() ), f) # write window size
          pickle.dump( (self.x(),self.y()), f)                # write window position
-         pickle.dump( self.toolsBar.isVisible(), f)          # write if tools toolbar is visible
+         pickle.dump( self.viewMenu.showTools.isChecked(), f)  # write if tools toolbar is visible; must check showTools action
+                                                               #because the toolbar itself was already destroyed and is not visible anymore
          for entry in self.centralWidget().entries:
             entry.ExportToFile(f)
          
@@ -865,7 +933,7 @@ class MainWindow(QtGui.QMainWindow):
          
    def SetIconSize(self, size):
       self.iconSize = size
-      self.iconSizeComboBox.SetCurrentSize(size)
+      self.toolsBar.iconSizeComboBox.SetCurrentSize(size)
       self.settingsMenu.CheckIconSizeAction(size)
 
       self.centralWidget().SetIconSize(size)
