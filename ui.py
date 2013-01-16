@@ -26,7 +26,7 @@ import win32com.client
 usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox
-from dialogs import ChooseIconDialog
+from dialogs import ChooseIconDialog, EntryPropertiesDialog
 
 
 class AppStarterEntry(QtCore.QObject):
@@ -294,9 +294,11 @@ class EntryMenu(QtGui.QMenu):
       
       self.renameAction = QtGui.QAction("&Rename", self)
       self.chooseIconAction = QtGui.QAction("Choose &icon", self)
+      self.propertiesAction = QtGui.QAction("&Properties", self)
       self.removeAction = QtGui.QAction("&Delete", self)
       self.addAction(self.chooseIconAction)
       self.addAction(self.renameAction)
+      self.addAction(self.propertiesAction)
       self.addSeparator()
       self.addAction(self.removeAction)
       
@@ -305,6 +307,7 @@ class EntryMenu(QtGui.QMenu):
    def InitConnections(self):
       if self.parent() is not None:
          self.chooseIconAction.triggered.connect(self.parent().ChooseIconForItem)
+         self.propertiesAction.triggered.connect(self.parent().EditItem)
          self.renameAction.triggered.connect(self.parent().RenameItem)
          self.removeAction.triggered.connect(self.parent().RemoveItem)
 
@@ -454,6 +457,12 @@ class CategoryWidget(QtGui.QListWidget):
          self.IconChanged.emit()
          item.entry.UpdateProfile.emit()
          
+   def EditItem(self):
+      item = self.currentItem()
+      if not item: return
+      dlg = EntryPropertiesDialog(entry=item.entry, parent=self)
+      result = dlg.exec_()
+         
    def RemoveItem(self):
       item = self.currentItem()
       if not item: return
@@ -558,7 +567,6 @@ class DetailsWidget(QtGui.QWidget):
       lay.addLayout(layV)
       
       self.setLayout(lay)
-      
       
    def SetEntry(self, entry):
       self.entry = entry
@@ -708,27 +716,6 @@ class MainWidget(QtGui.QWidget):
       self.SwapItems(row, row+1)
       self.activeCatWdg.setCurrentRow(row+1)
       
-   def SwapItems(self, id_a, id_b):
-      e_a = self.entries[id_a]
-      e_b = self.entries[id_b]
-      
-      self.entries[id_a] = e_b
-      self.entries[id_b] = e_a
-      
-      for wdg in self.catWidgets.values():
-         itm_a = wdg.item(id_a)
-         itm_b = wdg.item(id_b)
-         
-         wdg.takeItem(wdg.row(itm_a))
-         wdg.takeItem(wdg.row(itm_b))
-         
-         if id_a < id_b:
-            wdg.insertItem(id_a, itm_b)
-            wdg.insertItem(id_b, itm_a)
-         else:
-            wdg.insertItem(id_b, itm_a)
-            wdg.insertItem(id_a, itm_b)
-      
    def ParseUrl(self, url):
       file = unicode(url.toLocalFile())
       
@@ -801,6 +788,27 @@ class MainWidget(QtGui.QWidget):
       self.iconSize = size
       self.layout().setCurrentIndex(self.catWidgetIndices[size])
       self.activeCatWdg = self.catWidgets[size]
+      
+   def SwapItems(self, id_a, id_b):
+      e_a = self.entries[id_a]
+      e_b = self.entries[id_b]
+      
+      self.entries[id_a] = e_b
+      self.entries[id_b] = e_a
+      
+      for wdg in self.catWidgets.values():
+         itm_a = wdg.item(id_a)
+         itm_b = wdg.item(id_b)
+         
+         wdg.takeItem(wdg.row(itm_a))
+         wdg.takeItem(wdg.row(itm_b))
+         
+         if id_a < id_b:
+            wdg.insertItem(id_a, itm_b)
+            wdg.insertItem(id_b, itm_a)
+         else:
+            wdg.insertItem(id_b, itm_a)
+            wdg.insertItem(id_a, itm_b)
       
 class ToolsToolbar(QtGui.QToolBar):
    def __init__(self, parent=None):

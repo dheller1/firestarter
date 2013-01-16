@@ -16,7 +16,7 @@ import win32com.client
 usr32 = ctypes.windll.user32
 
 
-from widgets import IconSizeComboBox
+from widgets import IconSizeComboBox, AutoSelectAllLineEdit
 
 
 class ChooseIconDialog(QtGui.QDialog):
@@ -172,3 +172,49 @@ class ChooseIconDialog(QtGui.QDialog):
             files.append(os.path.join(dir,f))
             
       return files
+   
+
+class EntryPropertiesDialog(QtGui.QDialog):
+   def __init__(self, entry, parent=None):
+      QtGui.QDialog.__init__(self, parent)
+      
+      self.setWindowTitle("Properties")
+      self.resize(300,500)
+      
+      self.entry = entry
+      
+      # create widgets
+      self.okBtn = QtGui.QPushButton("&Ok", self)
+      self.okBtn.setDefault(True)
+      self.okBtn.clicked.connect(self.accept)
+      
+      self.cancelBtn = QtGui.QPushButton("&Cancel", self)
+      self.cancelBtn.clicked.connect(self.reject)
+      
+      
+      self.labelLe = AutoSelectAllLineEdit(entry.label, self)
+      self.filenameLe = AutoSelectAllLineEdit(entry.filename, self)
+      self.cmdLineArgsLe = AutoSelectAllLineEdit(entry.cmdLineArgs, self)
+      self.workingDirLe = AutoSelectAllLineEdit(entry.workingDir, self)
+      
+      iconTxt = "\"" + entry.iconPath + "\",%i" % entry.preferredIcon if entry.preferredIcon > -1 else "-"
+      self.iconLe = AutoSelectAllLineEdit(iconTxt, self)
+      
+      
+      # init layout
+      buttonsLayout= QtGui.QHBoxLayout()
+      buttonsLayout.addWidget(self.okBtn)
+      buttonsLayout.addWidget(self.cancelBtn)
+      
+      formLayout = QtGui.QFormLayout()
+      formLayout.addRow("Name:", self.labelLe)
+      formLayout.addRow("Executable:", self.filenameLe)
+      formLayout.addRow("Additional arguments:", self.cmdLineArgsLe)
+      formLayout.addRow("Working directory:", self.workingDirLe)
+      formLayout.addRow("Icon path:", self.iconLe)
+      
+      mainLayout = QtGui.QVBoxLayout()
+      mainLayout.addLayout(formLayout)
+      mainLayout.addLayout(buttonsLayout)
+      
+      self.setLayout(mainLayout)

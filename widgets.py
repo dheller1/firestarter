@@ -28,3 +28,12 @@ class IconSizeComboBox(QtGui.QComboBox):
       else:
          text = IconSizeComboBox.textTemplate %(size,size)
          self.setCurrentIndex(self.findText(text))
+         
+class AutoSelectAllLineEdit(QtGui.QLineEdit):
+   """ Custom QLineEdit which automatically selects all text if clicked. """
+   def __init__(self, text="", parent=None):
+      QtGui.QLineEdit.__init__(self, text, parent)
+      
+   def mousePressEvent(self, e):
+      QtGui.QWidget.mousePressEvent(self, e)
+      self.selectAll()
