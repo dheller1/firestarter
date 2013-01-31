@@ -1,0 +1,1 @@
+Icon selection dialog: Bei Doppelklick auf Icon -> Dialog akzeptieren.

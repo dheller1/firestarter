@@ -1,1 +1,2 @@
-copy *.* C:\users\heller\Dropbox\src
+xcopy *.* C:\users\heller\Dropbox\src /S /E /Y
+pause

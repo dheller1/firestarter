@@ -1,0 +1,1 @@
+-> Additional line per entry: Command line arguments (between label and icon path)

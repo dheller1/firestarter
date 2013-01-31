@@ -30,6 +30,7 @@ class ChooseIconDialog(QtGui.QDialog):
       self.resize(600,380)
       
       self.basefile = file
+      self.noIcon = False # only set true if 'No icon' is clicked
       
       # create widgets
       self.okBtn = QtGui.QPushButton("&Ok", self)
@@ -37,8 +38,12 @@ class ChooseIconDialog(QtGui.QDialog):
       self.okBtn.clicked.connect(self.accept)
       self.okBtn.setEnabled(False)
       
+      self.noIconBtn = QtGui.QPushButton("&No icon", self)
+      self.noIconBtn.clicked.connect(self.ReturnNoIcon)
+      
       self.cancelBtn = QtGui.QPushButton("&Cancel", self)
       self.cancelBtn.clicked.connect(self.reject)
+      self.cancelBtn.setFocus()
       
       self.selectFileBtn = QtGui.QPushButton("&Select file...", self)
       self.selectFileBtn.clicked.connect(self.SelectFile)
@@ -59,9 +64,9 @@ class ChooseIconDialog(QtGui.QDialog):
       buttonsLayout= QtGui.QHBoxLayout()
       buttonsLayout.addWidget(self.okBtn)
       buttonsLayout.addWidget(self.cancelBtn)
+      buttonsLayout.addWidget(self.noIconBtn)
       buttonsLayout.addWidget(self.selectFileBtn)
       buttonsLayout.addWidget(self.countLabel)
-      
       
       mainLayout = QtGui.QVBoxLayout(self)
       
@@ -84,7 +89,9 @@ class ChooseIconDialog(QtGui.QDialog):
    def exec_(self):
       result = QtGui.QDialog.exec_(self)
       
-      if result == QtGui.QDialog.Accepted and len(self.iconsList.selectedItems())==1:
+      if result == QtGui.QDialog.Accepted and self.noIcon:
+         return "", -1
+      elif result == QtGui.QDialog.Accepted and len(self.iconsList.selectedItems())==1:
          icon = self.iconsList.selectedItems()[0]
          return icon.file, icon.id
       else: return None
@@ -149,9 +156,13 @@ class ChooseIconDialog(QtGui.QDialog):
          
       self.countLabel.setText("%i icon%s found." % (count, "" if count==1 else "s"))
       
+   def ReturnNoIcon(self):
+      self.noIcon = True
+      self.accept()
+      
    def SelectFile(self):
       files = QtGui.QFileDialog.getOpenFileNames(self, "Select icon file(s):", os.path.dirname(self.basefile) if self.basefile else ".",\
-                                                 "Files containing icons (*.exe *.dll *.ico *.bmp)" )
+                                                 "Files containing icons (*.exe *.dll *.ico *.bmp);;All files (*.*)" )
       if len(files)>0:
          self.iconsList.clear()
          self.FillList(files)
@@ -179,9 +190,12 @@ class EntryPropertiesDialog(QtGui.QDialog):
       QtGui.QDialog.__init__(self, parent)
       
       self.setWindowTitle("Properties")
-      self.resize(300,500)
+      #self.resize(300,500)
       
       self.entry = entry
+      
+      # dialog flags
+      self.iconChanged = False       # icon update necessary
       
       # create widgets
       self.okBtn = QtGui.QPushButton("&Ok", self)
@@ -194,27 +208,102 @@ class EntryPropertiesDialog(QtGui.QDialog):
       
       self.labelLe = AutoSelectAllLineEdit(entry.label, self)
       self.filenameLe = AutoSelectAllLineEdit(entry.filename, self)
+      self.chooseExecutable = QtGui.QPushButton(QtGui.QIcon(os.path.join("gfx", "folder-open-icon.png")), "")
       self.cmdLineArgsLe = AutoSelectAllLineEdit(entry.cmdLineArgs, self)
       self.workingDirLe = AutoSelectAllLineEdit(entry.workingDir, self)
+      self.chooseWorkingDir = QtGui.QPushButton(QtGui.QIcon(os.path.join("gfx", "folder-open-icon.png")), "")
       
       iconTxt = "\"" + entry.iconPath + "\",%i" % entry.preferredIcon if entry.preferredIcon > -1 else "-"
-      self.iconLe = AutoSelectAllLineEdit(iconTxt, self)
-      
+      self.iconLe = AutoSelectAllLineEdit(iconTxt)
+      self.chooseIcon = QtGui.QPushButton(QtGui.QIcon(os.path.join("gfx", "folder-open-icon.png")), "")
       
       # init layout
       buttonsLayout= QtGui.QHBoxLayout()
       buttonsLayout.addWidget(self.okBtn)
       buttonsLayout.addWidget(self.cancelBtn)
       
-      formLayout = QtGui.QFormLayout()
-      formLayout.addRow("Name:", self.labelLe)
-      formLayout.addRow("Executable:", self.filenameLe)
-      formLayout.addRow("Additional arguments:", self.cmdLineArgsLe)
-      formLayout.addRow("Working directory:", self.workingDirLe)
-      formLayout.addRow("Icon path:", self.iconLe)
+      formLayout = QtGui.QGridLayout()
+      
+      formLayout.addWidget(QtGui.QLabel("Name:"), 0, 0)
+      formLayout.addWidget(self.labelLe, 0, 1, 1, 2)
+      
+      formLayout.addWidget(QtGui.QLabel("Executable:"), 1, 0)
+      formLayout.addWidget(self.filenameLe, 1, 1, 1, 1)
+      formLayout.addWidget(self.chooseExecutable, 1, 2, 1, 1)
+      
+      formLayout.addWidget(QtGui.QLabel("Additional arguments:"), 2, 0)
+      formLayout.addWidget(self.cmdLineArgsLe, 2, 1, 1, 2)
+      
+      formLayout.addWidget(QtGui.QLabel("Working directory:"), 3, 0)
+      formLayout.addWidget(self.workingDirLe, 3, 1, 1, 1)
+      formLayout.addWidget(self.chooseWorkingDir, 3, 2, 1, 1)
+      
+      formLayout.addWidget(QtGui.QLabel("Icon:"), 4, 0)
+      formLayout.addWidget(self.iconLe, 4, 1, 1, 1)
+      formLayout.addWidget(self.chooseIcon, 4, 2, 1, 1)
+      
+      #formLayout.addRow("Name:", self.labelLe)
+      #formLayout.addRow("Executable:", self.filenameLe)
+      #formLayout.addRow("Additional arguments:", self.cmdLineArgsLe)
+      #formLayout.addRow("Working directory:", self.workingDirLe)
+      #formLayout.addRow("Icon path:", iconWdg)
       
       mainLayout = QtGui.QVBoxLayout()
       mainLayout.addLayout(formLayout)
       mainLayout.addLayout(buttonsLayout)
       
       self.setLayout(mainLayout)
+      
+      self.InitConnections()
+      
+   def exec_(self):
+      """ If the icon has been changed, return the new icon path """
+      result = QtGui.QDialog.exec_(self)
+      
+      if result == QtGui.QDialog.Accepted:
+         self.entry.label = str(self.labelLe.text())
+         self.entry.filename = str(self.filenameLe.text())
+         self.entry.workingDir = str(self.workingDirLe.text())
+         self.entry.cmdLineArgs = str(self.cmdLineArgsLe.text())
+         
+         if self.iconChanged:
+            self.entry.iconPath = self.newIconPath
+            self.entry.preferredIcon = self.newIconId
+            self.entry.LoadIcon()
+            self.entry.UpdateIcon.emit()
+            
+         self.entry.UpdateText.emit()
+         self.entry.UpdateProfile.emit()
+      
+      return result
+      
+   def ChangeExecutable(self):
+      file = QtGui.QFileDialog.getOpenFileName(self, "Choose executable:", self.filenameLe.text(), "Executable files (*.exe)")
+      if file != "":
+         self.filenameLe.setText(file)
+         self.workingDirLe.setText(os.path.dirname(str(file)))
+      
+   def ChangeIcon(self):
+      dlg = ChooseIconDialog(self, file=self.entry.iconPath, suggestions=True)
+      result = dlg.exec_()
+      
+      if result == None: return
+      else:
+         path, id = result
+         if self.entry.iconPath != path or self.entry.preferredIcon != id:
+            self.newIconPath = path
+            self.newIconId = id
+            self.iconChanged = True
+            self.changed = True
+            iconTxt = "\"" + path + "\",%i" % id if id > -1 else "-"
+            self.iconLe.setText(iconTxt)
+            
+   def ChangeWorkingDir(self):
+      wd = QtGui.QFileDialog.getExistingDirectory(self, "Choose working directory:", self.workingDirLe.text())
+      if wd != "":
+         self.workingDirLe.setText(wd)
+      
+   def InitConnections(self):
+      self.chooseIcon.clicked.connect(self.ChangeIcon)
+      self.chooseExecutable.clicked.connect(self.ChangeExecutable)
+      self.chooseWorkingDir.clicked.connect(self.ChangeWorkingDir)
