@@ -56,6 +56,7 @@ class ChooseIconDialog(QtGui.QDialog):
       self.iconsList.setIconSize(size)
       #self.iconsList.setGridSize(size)
       self.iconsList.setMovement(QtGui.QListView.Static)
+      self.iconsList.itemDoubleClicked.connect(self.accept)
       
       self.iconSizeComboBox = IconSizeComboBox(self)
       self.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)

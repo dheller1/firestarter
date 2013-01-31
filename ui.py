@@ -8,6 +8,7 @@ import os, time
 import ctypes
 import pickle
 import subprocess, threading
+import shutil
 
 from ctypes import byref
 
@@ -892,6 +893,9 @@ class MainWindow(QtGui.QMainWindow):
    def LoadProfile(self, filename=None):
       if filename is None: filename = '%s.dat' % self.profile
       if not os.path.exists(filename): return
+      
+      shutil.copyfile(filename, "~"+filename+".bak")
+      error = False
       
       with open(filename, 'r') as f:
          try:

@@ -1,1 +1,1 @@
-Icon selection dialog: Bei Doppelklick auf Icon -> Dialog akzeptieren.
+Error Handling / automatische Backups bei Fehlern beim Profil laden
