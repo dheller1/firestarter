@@ -457,7 +457,7 @@ class CategoryWidget(QtGui.QListWidget):
          item.entry.iconPath = path
          item.entry.preferredIcon = id
          item.entry.LoadIcon()
-         item.UpdateIcon()
+         item.entry.UpdateIcon.emit()
          self.IconChanged.emit()
          item.entry.UpdateProfile.emit()
          
