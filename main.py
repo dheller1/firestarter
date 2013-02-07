@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 Created on 03.01.2013
 
@@ -8,9 +9,11 @@ import sys
 
 from ui import MainWindow
 from PyQt4 import QtGui
+from util import flushLogfiles
 
 
 def main():
+   flushLogfiles(("parser.log",), 'utf-8')
    app = QtGui.QApplication(sys.argv)
    
    mainWnd = MainWindow()

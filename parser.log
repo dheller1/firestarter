@@ -1,0 +1,15 @@
+# -*- coding: utf-8 -*-
+(07.02.2013 - 18:12:19) ... *** Starting program, old logfile erased *** ...
+
+(07.02.2013 - 18:12:19) Creating file parser object.
+(07.02.2013 - 18:12:27) Creating file parser object.
+(07.02.2013 - 18:12:27) Requesting file format specifier for version '0.1a' (profile).
+(07.02.2013 - 18:12:27) Wrote handler member variable 'iconSize' as '256'.
+(07.02.2013 - 18:12:27) Wrote handler member variable 'numEntries' as '0'.
+(07.02.2013 - 18:12:27) Wrote handler member variable 'windowSize' as '800'.
+(07.02.2013 - 18:12:27) Wrote handler member variable 'windowSize' as '600'.
+(07.02.2013 - 18:12:27) Wrote handler member variable 'windowPos' as '-1205'.
+(07.02.2013 - 18:12:27) Wrote handler member variable 'windowPos' as '75'.
+(07.02.2013 - 18:12:27) Wrote handler member variable 'toolsVisible' as '1'.
+(07.02.2013 - 18:12:27) Finished writing.
+

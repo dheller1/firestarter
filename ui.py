@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 Created on 03.01.2013
 
@@ -9,8 +10,10 @@ import ctypes
 import pickle
 import subprocess, threading
 import shutil
+import codecs 
 
 from ctypes import byref
+from types import *
 
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt, pyqtSignal
@@ -26,9 +29,9 @@ import win32com.client
 
 usr32 = ctypes.windll.user32
 
-from widgets import IconSizeComboBox
+from widgets import IconSizeComboBox, ToolsToolbar
 from dialogs import ChooseIconDialog, EntryPropertiesDialog
-
+from util import din5007, ProfileSettings, FileParser
 
 class AppStarterEntry(QtCore.QObject):
    UpdateText = pyqtSignal()
@@ -44,8 +47,8 @@ class AppStarterEntry(QtCore.QObject):
       self.cmdLineArgs = ""
       self.totalTime = 0.
       self.running = False
-      self.label = "Unknown application"
-      self.position = (0,0) # position in listwidget grid
+      self.label = u"Unknown application"
+      self.position = 0
       
       if path is not None:
          head, tail = os.path.split(path)
@@ -122,7 +125,7 @@ class AppStarterEntry(QtCore.QObject):
       self.running = True
       self.UpdateText.emit()
       
-      svThread = threading.Thread(target=self.SuperviseProcess, name=self.label, args=(prc,))
+      svThread = threading.Thread(target=self.SuperviseProcess, args=(prc,))
       svThread.start()
       
    def SuperviseProcess(self, process):
@@ -407,8 +410,12 @@ class EntryMenu(QtGui.QMenu):
       
 
 class CategoryWidget(QtGui.QListWidget):
-   ProfileChanged = pyqtSignal()
+   FirstItemSelected = pyqtSignal()
    IconChanged = pyqtSignal()
+   LastItemSelected = pyqtSignal()
+   EnableReorderButtons = pyqtSignal()
+   ProfileChanged = pyqtSignal()
+   
    
    def __init__(self, parent=None, iconSize = 48):
       QtGui.QListWidget.__init__(self, parent)
@@ -418,6 +425,8 @@ class CategoryWidget(QtGui.QListWidget):
       
       # connections
       self.itemDoubleClicked.connect(self.RunItem)
+      self.itemSelectionChanged.connect(self.ItemSelectionChanged)
+      self.currentRowChanged.connect(self.ItemSelectionChanged) # connect this too, as reordering might change row but keep item selection
 
    def contextMenuEvent(self, e):
       lwitem = self.itemAt(e.pos())
@@ -466,6 +475,21 @@ class CategoryWidget(QtGui.QListWidget):
       if not item: return
       dlg = EntryPropertiesDialog(entry=item.entry, parent=self)
       result = dlg.exec_()
+      
+   def ItemSelectionChanged(self):
+      row = self.currentRow()
+      
+      if len(self.selectedItems())==0:
+         # nothing selected, disable both directions
+         self.FirstItemSelected.emit() # disables 'Up'
+         self.LastItemSelected.emit()  # disables 'Down'
+         return
+      
+      self.EnableReorderButtons.emit() # enables both directions
+      if row == 0:
+         self.FirstItemSelected.emit() # disables 'Up'
+      if row == self.count()-1:
+         self.LastItemSelected.emit()  # disables 'Down'
          
    def RemoveItem(self):
       item = self.currentItem()
@@ -480,7 +504,7 @@ class CategoryWidget(QtGui.QListWidget):
       
       text, accepted = QtGui.QInputDialog.getText(self, "Rename %s" % entry.label, "Please enter new name:", text=entry.label)
       if accepted:
-         entry.label = text
+         entry.label = unicode(text)
          item.UpdateText()
          item.entry.UpdateProfile.emit()
          
@@ -593,6 +617,10 @@ class DetailsWidget(QtGui.QWidget):
       self.playtimeLabel.setText(timeText)
       
 class CategoryListAndDetailsWidget(QtGui.QWidget):
+   FirstItemSelected = pyqtSignal()
+   IconChanged = pyqtSignal()
+   LastItemSelected = pyqtSignal()
+   EnableReorderButtons = pyqtSignal()
    ProfileChanged = pyqtSignal()
    
    def __init__(self, parent=None):
@@ -613,6 +641,10 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       self.catWdg.ProfileChanged.connect(self.ProfileChangedSlot)
       self.catWdg.currentItemChanged.connect(self.CurrentItemChanged)
       self.catWdg.IconChanged.connect(self.IconChanged)
+      
+      self.catWdg.FirstItemSelected.connect(self.FirstItemSelectedSlot)
+      self.catWdg.LastItemSelected.connect(self.LastItemSelectedSlot)
+      self.catWdg.EnableReorderButtons.connect(self.EnableReorderButtonsSlot)
       
       # set stylesheet
       style  = " background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; "\
@@ -640,7 +672,10 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
    
    def setCurrentRow(self, row):
       return self.catWdg.setCurrentRow(row)
-   
+      
+   def sortItems(self):
+      self.catWdg.sortItems()
+         
    def takeItem(self, row):
       return self.catWdg.takeItem(row)
       
@@ -654,12 +689,18 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       item = self.catWdg.currentItem()
       self.CurrentItemChanged(item)
       
-   def ProfileChangedSlot(self):
-      # just pass this signal on
-      self.ProfileChanged.emit()
-      
    def RemoveItem(self, item, row):
       self.parent().RemoveItem(item, row)
+   
+   # just pass these signals on
+   def EnableReorderButtonsSlot(self):
+      self.EnableReorderButtons.emit()
+   def FirstItemSelectedSlot(self):
+      self.FirstItemSelected.emit()
+   def LastItemSelectedSlot(self):
+      self.LastItemSelected.emit()
+   def ProfileChangedSlot(self):
+      self.ProfileChanged.emit()
       
 class MainWidget(QtGui.QWidget):
    def __init__(self, parent=None):
@@ -692,6 +733,12 @@ class MainWidget(QtGui.QWidget):
          catWdg.AddEntry(entry)
          
       entry.UpdateProfile.connect(self.parent().SaveProfile)
+      
+   def ConnectToToolsBar(self, tb):
+      for wdg in self.catWidgets.values():
+         wdg.EnableReorderButtons.connect(tb.EnableButtons)
+         wdg.FirstItemSelected.connect(tb.DisableUpButton)
+         wdg.LastItemSelected.connect(tb.DisableDownButton)
       
    def InitLayout(self):
       self.iconSize = 256
@@ -793,6 +840,14 @@ class MainWidget(QtGui.QWidget):
       self.layout().setCurrentIndex(self.catWidgetIndices[size])
       self.activeCatWdg = self.catWidgets[size]
       
+   def SortByTitle(self):
+      # sort all child widgets by title
+      entries = sorted(self.entries, key=lambda entry: din5007(entry.label))
+      for i in entries: print i.label
+      #for wdg in self.catWidgets.values():
+         
+      #   wdg.sortItems()
+      
    def SwapItems(self, id_a, id_b):
       e_a = self.entries[id_a]
       e_b = self.entries[id_b]
@@ -814,29 +869,6 @@ class MainWidget(QtGui.QWidget):
             wdg.insertItem(id_b, itm_a)
             wdg.insertItem(id_a, itm_b)
       
-class ToolsToolbar(QtGui.QToolBar):
-   def __init__(self, parent=None):
-      QtGui.QToolBar.__init__(self, "Tools", parent)
-      
-      # init children
-      self.iconSizeComboBox = IconSizeComboBox()
-      self.upBtn = QtGui.QPushButton()
-      self.upBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "Actions-arrow-up-icon.png")))
-      
-      self.downBtn = QtGui.QPushButton()
-      self.downBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "Actions-arrow-down-icon.png")))
-      
-      # init layout
-      dwWdg = QtGui.QWidget(self)
-      dwWdg.setLayout(QtGui.QHBoxLayout())
-      
-      dwWdg.layout().addStretch(1)
-      dwWdg.layout().addWidget(self.upBtn)
-      dwWdg.layout().addWidget(self.downBtn)
-      dwWdg.layout().addWidget(self.iconSizeComboBox)
-      
-      self.addWidget(dwWdg)
-
 class MainWindow(QtGui.QMainWindow):
    def __init__(self):
       QtGui.QMainWindow.__init__(self)
@@ -851,6 +883,7 @@ class MainWindow(QtGui.QMainWindow):
       # init toolbar
       self.toolsBar = ToolsToolbar(self)
       self.addToolBar(self.toolsBar)
+      self.centralWidget().ConnectToToolsBar(self.toolsBar)
       
       # init menus and connections
       self.InitMenus()
@@ -861,27 +894,21 @@ class MainWindow(QtGui.QMainWindow):
       self.LoadProfile()
       
    def __del__(self):
-      print "Saving profile prior to closing program..."
+      #print "Saving profile prior to closing program..."
       self.SaveProfile()
       
    def moveEvent(self, e):
-      if e.oldPos() != e.pos():
-         self.SaveProfile()
+      pass
       
    def resizeEvent(self, e):
-      # if using toolbars/dockwidgets later, be sure to take a look at QMainWindow::saveState / QSettings
-      if e.oldSize() != e.size():
-         updateProfile = True
-         
-      QtGui.QWidget.resizeEvent(self, e)
-         
-      if updateProfile:
-         self.SaveProfile()
-      
+      pass
+   
    def InitConnections(self):
       self.toolsBar.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)
       self.toolsBar.upBtn.clicked.connect(self.centralWidget().MoveItemUp)
       self.toolsBar.downBtn.clicked.connect(self.centralWidget().MoveItemDown)
+      
+      self.toolsBar.sortComboBox.SortByTitleSelected.connect(self.centralWidget().SortByTitle)
    
    def InitMenus(self):
       self.settingsMenu = SettingsMenu(self, self.centralWidget().iconSize)
@@ -891,59 +918,115 @@ class MainWindow(QtGui.QMainWindow):
       self.menuBar().addMenu(self.settingsMenu)
       
    def LoadProfile(self, filename=None):
+      profileVersion = '0.1a'
+      entryVersion   = '0.1a'
+      
       if filename is None: filename = '%s.dat' % self.profile
       if not os.path.exists(filename): return
       
       shutil.copyfile(filename, "~"+filename+".bak")
       error = False
       
+      # determine encoding
       with open(filename, 'r') as f:
-         try:
-            iconSize = pickle.load(f)
-            numEntries = pickle.load(f)
-            
-            # restore window size and position
-            size = pickle.load(f)
-            self.resize(size[0], size[1])
-            pos = pickle.load(f)
-            self.move(pos[0],pos[1])
-            
-            toolsVisible = pickle.load(f)
-            self.toolsBar.setVisible(toolsVisible)
-         except:
-            QtGui.QMessageBox.critical(self, "Error", "Invalid profile '%s'!" % filename)
+         codepage = f.readline().strip()
+         codepage = codepage.replace('# -*- coding:','').replace('-*-','').strip()
+      
+      # try to open file with this encoding
+      try:
+         f = codecs.open(filename, 'r', codepage)
+         f.close()
+      except LookupError: # unknown coding
+         QtGui.QMessageBox.critical(self, "Error", "Unknown codepage '%s' used in profile '%s'.\nPlease fix this manually. Loading empty profile." % (codepage, filename))
+         error = True
+         return error
+      
+      p = ProfileSettings()
+      fp = FileParser()
+      
+      # open file
+      with codecs.open(filename, 'r', codepage) as f:
+         f.readline() # skip codepage
+         
+         fmt = f.readline().strip() # read file format version
+         if fmt != profileVersion:
+            QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for profile '%s'!\nAborting load process." % (fmt, filename))
+            return
+         try: fp.ParseByVersion(file=f, handler=p, version=profileVersion, type='profile')
+         except ValueError as e:
+            QtGui.QMessageBox.critical(self, "Profile loading error", str(e))
             return
          
-         # set correct icon size
-         try:
-            self.SetIconSize(iconSize)
-         except ValueError: QtGui.QMessageBox(self, "Warning", "Invalid icon size in profile: %ix%ipx" %(iconSize,iconSize))
-         
-         for i in range(numEntries):
+         for i in range(p.numEntries):
+            fmt = f.readline().strip() # read file format version
+            if fmt != entryVersion:
+               QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for entry in profile '%s'!\nAborting load process." % (fmt, filename))
+               return
+            
             entry = AppStarterEntry(parentWidget=self.centralWidget())
+            
             try:
-               entry.ImportFromFile(f)
-               try:
-                  entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
-               except IOError: pass
+               fp.ParseByVersion(file=f, handler=entry, version=entryVersion, type='entry')
+            except ValueError as e:
+               QtGui.QMessageBox.critical(self, "Profile loading error (entry)", str(e))
+               return
+            except EOFError:
+               QtGui.QMessageBox.critical(self, "End of file error", "Unable to load entry %i from profile '%s'!\nEntries might be incomplete." % (i+1, filename))
+               continue
+            entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
+            #try:
+            #   entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
+            #except IOError: pass
                
-               self.centralWidget().AddEntry(entry)
-            except EOFError: QtGui.QMessageBox.critical(self, "Error", "Unable to load entry %i from profile '%s'!\nEntries might be incomplete." % (i+1, filename))
+            self.centralWidget().AddEntry(entry)
+            
+      # apply settings      
+      try: self.SetIconSize(p.iconSize)
+      except ValueError: QtGui.QMessageBox.warning(self, "Warning", "Invalid icon size in profile: %ix%ipx" %(p.iconSize,p.iconSize))
+      
+      try: self.resize(p.windowSize[0], p.windowSize[1])
+      except ValueError: QtGui.QMessageBox.warning(self, "Warning", "Invalid window size in profile: %ix%i" %(p.windowSize[0],p.windowSize[1]))
+      
+      try: self.move(p.windowPos[0], p.windowPos[1])
+      except ValueError: QtGui.QMessageBox.warning(self, "Warning", "Invalid window position in profile: %i, %i" %(p.windowPos[0],p.windowPos[1]))
+
+      self.toolsBar.setVisible(p.toolsVisible)
+
    
    def SaveProfile(self, filename=None):
       if filename is None: filename = '%s.dat' % self.profile
       
+      codepage = 'utf-8'
+      profileVersion = '0.1a'
+      entryVersion   = '0.1a'
+      
+      p = ProfileSettings()
+      
+      p.iconSize = self.centralWidget().iconSize
+      p.numEntries = len(self.centralWidget().entries)
+      p.windowSize = (self.size().width(), self.size().height())
+      p.windowPos = (self.x(), self.y())
+      p.toolsVisible = self.viewMenu.showTools.isChecked()
+      
+      # do not use bool, non-empty strings are always True, even 'False' !
+      format = [ ('iconSize', int),
+                 ('numEntries', int),
+                 ('windowSize', (int,int)),
+                 ('windowPos', (int,int)),
+                 ('toolsVisible', int) ]
+      
+      fp = FileParser()
+      
       #startTime = time.clock()
-      with open(filename, 'w') as f:
-         pickle.dump(self.centralWidget().iconSize, f)       # write preferred icon size 
-         pickle.dump(len(self.centralWidget().entries), f)   # write number of entries
-         pickle.dump( (self.size().width() , self.size().height() ), f) # write window size
-         pickle.dump( (self.x(),self.y()), f)                # write window position
-         pickle.dump( self.viewMenu.showTools.isChecked(), f)  # write if tools toolbar is visible; must check showTools action
-                                                               #because the toolbar itself was already destroyed and is not visible anymore
-         for entry in self.centralWidget().entries:
-            entry.ExportToFile(f)
+      with codecs.open(filename, 'w', codepage) as f:
+         f.write("# -*- coding: %s -*-\n" % codepage)
          
+         f.write(profileVersion+'\n') # always write file format version first
+         fp.WriteByVersion(file=f, handler=p, version=profileVersion, type='profile')
+         
+         for entry in self.centralWidget().entries:
+            f.write(entryVersion+'\n')# always write file format version first
+            fp.WriteByVersion(file=f, handler=entry, version=entryVersion, type='entry')
          #print "Saved profile in %f seconds." % (time.clock() - startTime)
          
    def SetIconSize(self, size):
