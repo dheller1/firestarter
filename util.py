@@ -20,6 +20,7 @@ class ProfileSettings:
       self.windowSize = None
       self.windowPos  = None
       self.toolsVisible = None
+      self.sortMode = None
       self.entries = []
 
 class EntrySettings:
@@ -41,7 +42,14 @@ class FileParser:
               ('numEntries', int),
               ('windowSize', (int,int)),
               ('windowPos', (int,int)),
-              ('toolsVisible', int) ] }
+              ('toolsVisible', int) ] ,
+              
+    '0.1b': [ ('iconSize', int),
+              ('numEntries', int),
+              ('windowSize', (int,int)),
+              ('windowPos', (int,int)),
+              ('toolsVisible', int),
+              ('sortMode', str) ] }
    
    # dictionary with entry format specifiers, accessed by format version
    entryFormats = {
@@ -232,7 +240,7 @@ def din5007(input):
    
    # key1: compare words lowercase and replace umlauts according to DIN 5007
    key1=input.lower()
-   key1=key1.replace('\x84', "a")
+   key1=key1.replace(u'\x84', "a")
    key1=key1.replace(u'\x94', "o")
    key1=key1.replace(u'\x81', "u")
    key1=key1.replace(u'\xE1', "ss")

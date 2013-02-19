@@ -655,6 +655,9 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       #       + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
       #self.setStyleSheet(style)
    
+   def clear(self):
+      return self.catWdg.clear()
+   
    def count(self):
       return self.catWdg.count()
    
@@ -703,12 +706,18 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       self.ProfileChanged.emit()
       
 class MainWidget(QtGui.QWidget):
+   ManualSortingEnabled = pyqtSignal()
+   
    def __init__(self, parent=None):
       QtGui.QWidget.__init__(self, parent)
       
       self.setAcceptDrops(True)
       self.entries = []
+      self.lastManuallySortedEntries = self.entries
       self.InitLayout()
+      
+      self.isManuallySorted = True
+      self.sortMode = "manual"
       
    def dragEnterEvent(self, event):
       if (event.mimeData().hasUrls()):
@@ -725,7 +734,7 @@ class MainWidget(QtGui.QWidget):
             
       event.acceptProposedAction()
       
-   def AddEntry(self, entry):
+   def AddEntry(self, entry, manuallySorted = False):
       self.entries.append(entry)
       
       # send to child layouts
@@ -733,6 +742,10 @@ class MainWidget(QtGui.QWidget):
          catWdg.AddEntry(entry)
          
       entry.UpdateProfile.connect(self.parent().SaveProfile)
+      
+      if manuallySorted:
+         self.lastManuallySortedEntries = self.entries
+         self.isManuallySorted = True
       
    def ConnectToToolsBar(self, tb):
       for wdg in self.catWidgets.values():
@@ -761,11 +774,15 @@ class MainWidget(QtGui.QWidget):
       self.SwapItems(row, row-1)
       self.activeCatWdg.setCurrentRow(row-1)
       
+      self.SetNewManualOrder()
+      
    def MoveItemDown(self):
       row = self.activeCatWdg.currentRow()
       if row == self.activeCatWdg.count()-1: return
       self.SwapItems(row, row+1)
       self.activeCatWdg.setCurrentRow(row+1)
+      
+      self.SetNewManualOrder()
       
    def ParseUrl(self, url):
       file = unicode(url.toLocalFile())
@@ -793,6 +810,18 @@ class MainWidget(QtGui.QWidget):
       
       self.AddEntry(entry)
       self.parent().SaveProfile()
+      self.SetNewManualOrder()
+   
+   def Refill(self, entries):
+      """ Clear all entries and repopulate the list with the given entries, which might be a sorted version of the old list,
+        for instance. """
+      self.entries = []
+      
+      for catWdg in self.catWidgets.values():
+         catWdg.clear()
+         
+      for e in entries:
+         self.AddEntry(e)
       
    def RemoveItem(self, entry, row):
       msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, "Warning: Deleting entry", "Do you really want to remove this entry? All"+\
@@ -835,19 +864,52 @@ class MainWidget(QtGui.QWidget):
          del i
       
       self.parent().SaveProfile()
+      
+   def RestoreLastManualSorting(self):
+      if self.isManuallySorted: return
+      else:
+         self.sortMode = "manual"
+         self.isManuallySorted = True
+         self.Refill(self.lastManuallySortedEntries)
          
    def SetIconSize(self, size):
       self.iconSize = size
       self.layout().setCurrentIndex(self.catWidgetIndices[size])
       self.activeCatWdg = self.catWidgets[size]
       
+   def SetNewManualOrder(self):
+      """ Set the current entry order as the new manual one. """
+      self.sortMode = "manual"
+      self.isManuallySorted = True
+      self.lastManuallySortedEntries = self.entries
+      
+      self.ManualSortingEnabled.emit()
+
+   def SortByCurrentSortMode(self):
+      if self.sortMode == "time": self.SortByTime()
+      elif self.sortMode == "title": self.SortByTitle()
+      else: return # manual sorting or unsupported string
+      
+   def SortByTime(self):
+      if self.isManuallySorted:
+         self.lastManuallySortedEntries = self.entries
+      
+      self.isManuallySorted = False
+      self.sortMode = "time"
+      # sort all child widgets by time   
+      entries = sorted(self.entries, key=lambda entry: entry.totalTime, reverse=True)
+      self.Refill(entries)
+      
    def SortByTitle(self):
+      if self.isManuallySorted:
+         self.lastManuallySortedEntries = self.entries
+      
+      self.isManuallySorted = False   
+      self.sortMode = "title"
       # sort all child widgets by title
       entries = sorted(self.entries, key=lambda entry: din5007(entry.label))
-      for i in entries: print i.label
-      #for wdg in self.catWidgets.values():
-         
-      #   wdg.sortItems()
+      self.Refill(entries)
+      
       
    def SwapItems(self, id_a, id_b):
       e_a = self.entries[id_a]
@@ -909,7 +971,11 @@ class MainWindow(QtGui.QMainWindow):
       self.toolsBar.upBtn.clicked.connect(self.centralWidget().MoveItemUp)
       self.toolsBar.downBtn.clicked.connect(self.centralWidget().MoveItemDown)
       
+      self.toolsBar.sortComboBox.ManualSortingSelected.connect(self.centralWidget().RestoreLastManualSorting)
       self.toolsBar.sortComboBox.SortByTitleSelected.connect(self.centralWidget().SortByTitle)
+      self.toolsBar.sortComboBox.SortByTimeSelected.connect(self.centralWidget().SortByTime)
+      
+      self.centralWidget().ManualSortingEnabled.connect(self.toolsBar.sortComboBox.SelectManualSorting)
    
    def InitMenus(self):
       self.settingsMenu = SettingsMenu(self, self.centralWidget().iconSize)
@@ -919,7 +985,7 @@ class MainWindow(QtGui.QMainWindow):
       self.menuBar().addMenu(self.settingsMenu)
       
    def LoadProfile(self, filename=None):
-      profileVersion = '0.1a'
+      profileVersion = '0.1b'
       entryVersion   = '0.1a'
       
       if filename is None: filename = '%s.dat' % self.profile
@@ -979,7 +1045,7 @@ class MainWindow(QtGui.QMainWindow):
             #   entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
             #except IOError: pass
                
-            self.centralWidget().AddEntry(entry)
+            self.centralWidget().AddEntry(entry, manuallySorted=True) # always add as manually sorted, might be overwritten later
             
       # apply settings      
       try: self.SetIconSize(p.iconSize)
@@ -990,6 +1056,13 @@ class MainWindow(QtGui.QMainWindow):
       
       try: self.move(p.windowPos[0], p.windowPos[1])
       except ValueError: QtGui.QMessageBox.warning(self, "Warning", "Invalid window position in profile: %i, %i" %(p.windowPos[0],p.windowPos[1]))
+      
+      if p.sortMode not in ("manual", "title", "time"):
+         QtGui.QMessageBox.warning(self, "Warning", "Invalid sort mode '%s' in profile, defaulting to manual sorting." % p.sortMode)
+         self.centralWidget().sortMode = "manual"
+      else: self.centralWidget().sortMode = p.sortMode
+      self.centralWidget().SortByCurrentSortMode()
+      self.toolsBar.sortComboBox.setCurrentIndex(1 if p.sortMode == "title" else 2 if p.sortMode == "time" else 0)
 
       self.toolsBar.setVisible(p.toolsVisible)
 
@@ -998,7 +1071,7 @@ class MainWindow(QtGui.QMainWindow):
       if filename is None: filename = '%s.dat' % self.profile
       
       codepage = 'utf-8'
-      profileVersion = '0.1a'
+      profileVersion = '0.1b'
       entryVersion   = '0.1a'
       
       p = ProfileSettings()
@@ -1008,13 +1081,7 @@ class MainWindow(QtGui.QMainWindow):
       p.windowSize = (self.size().width(), self.size().height())
       p.windowPos = (self.x(), self.y())
       p.toolsVisible = self.viewMenu.showTools.isChecked()
-      
-      # do not use bool, non-empty strings are always True, even 'False' !
-      format = [ ('iconSize', int),
-                 ('numEntries', int),
-                 ('windowSize', (int,int)),
-                 ('windowPos', (int,int)),
-                 ('toolsVisible', int) ]
+      p.sortMode = self.centralWidget().sortMode
       
       fp = FileParser()
       
@@ -1025,7 +1092,7 @@ class MainWindow(QtGui.QMainWindow):
          f.write(profileVersion+'\n') # always write file format version first
          fp.WriteByVersion(file=f, handler=p, version=profileVersion, type='profile')
          
-         for entry in self.centralWidget().entries:
+         for entry in self.centralWidget().lastManuallySortedEntries:
             f.write(entryVersion+'\n')# always write file format version first
             fp.WriteByVersion(file=f, handler=entry, version=entryVersion, type='entry')
          #print "Saved profile in %f seconds." % (time.clock() - startTime)

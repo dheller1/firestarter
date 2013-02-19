@@ -36,15 +36,18 @@ class IconSizeComboBox(QtGui.QComboBox):
 class SortModeComboBox(QtGui.QComboBox):
    ManualSortingSelected = pyqtSignal()
    SortByTitleSelected = pyqtSignal()
+   SortByTimeSelected = pyqtSignal()
    
    manualTxt = "Manual sorting"
    byTitleTxt = "Sort by title"
+   byTimeTxt ="Sort by playtime"
    
    def __init__(self, parent=None):
       QtGui.QComboBox.__init__(self, parent)
       
       self.addItem(SortModeComboBox.manualTxt)
       self.addItem(SortModeComboBox.byTitleTxt)
+      self.addItem(SortModeComboBox.byTimeTxt)
       
       # connections
       self.currentIndexChanged.connect(self.CurrentIndexChangedSlot)
@@ -55,6 +58,11 @@ class SortModeComboBox(QtGui.QComboBox):
          self.ManualSortingSelected.emit()
       elif str(text) == SortModeComboBox.byTitleTxt:
          self.SortByTitleSelected.emit()
+      elif str(text) == SortModeComboBox.byTimeTxt:
+         self.SortByTimeSelected.emit()
+         
+   def SelectManualSorting(self):
+      self.setCurrentIndex(0)
       
 class ToolsToolbar(QtGui.QToolBar):
    def __init__(self, parent=None):

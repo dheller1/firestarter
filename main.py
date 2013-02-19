@@ -11,7 +11,7 @@ from ui import MainWindow
 from PyQt4 import QtGui
 from util import flushLogfiles
 
-def checkPidRunning(pid):        
+def pidRunning(pid):        
    '''Check For the existence of a pid.'''
    wmi = win32com.client.GetObject('winmgmts:')
    prc = wmi.ExecQuery('Select * from win32_process where ProcessId=%s' % pid)
@@ -27,7 +27,7 @@ def main():
    if os.path.isfile(pidfile):         # pid file available?
       with open(pidfile, 'r') as pf:
          oldpid = pf.readlines()[0]
-         if checkPidRunning(oldpid):   # process with pid still alive?
+         if pidRunning(oldpid):   # process with pid still alive?
             running = True
    
    if running: sys.exit()
