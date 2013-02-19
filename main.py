@@ -5,21 +5,48 @@ Created on 03.01.2013
 @author: heller
 '''
 
-import sys
+import sys, os, win32com.client
 
 from ui import MainWindow
 from PyQt4 import QtGui
 from util import flushLogfiles
 
+def checkPidRunning(pid):        
+   '''Check For the existence of a pid.'''
+   wmi = win32com.client.GetObject('winmgmts:')
+   prc = wmi.ExecQuery('Select * from win32_process where ProcessId=%s' % pid)
+   return (len(prc)>0)
 
 def main():
+   # check if the program is already running
+   pid = str(os.getpid())
+   pidfile = "~firestarter.pid"
+   
+   running = False
+   
+   if os.path.isfile(pidfile):         # pid file available?
+      with open(pidfile, 'r') as pf:
+         oldpid = pf.readlines()[0]
+         if checkPidRunning(oldpid):   # process with pid still alive?
+            running = True
+   
+   if running: sys.exit()
+   else:
+      with open(pidfile, 'w') as pf: pf.write(pid)
+
    flushLogfiles(("parser.log",), 'utf-8')
    app = QtGui.QApplication(sys.argv)
    
+   
+   # run program
    mainWnd = MainWindow()
    mainWnd.show()
    
-   sys.exit(app.exec_())
+   ret = app.exec_()
+
+   # cleanup and exit
+   os.remove(pidfile)
+   sys.exit(ret)
    
 if __name__=="__main__":
    main()
