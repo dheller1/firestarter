@@ -1,1 +1,6 @@
-Error Handling / automatische Backups bei Fehlern beim Profil laden
+- Error Handling / automatische Backups bei Fehlern beim Profil laden
+- Check ob Programm schon läuft, falls ja kein weiteres Mal starten (zumindest nicht mit demselben Profil)
+- Ordnen nach Alphabet, Spielzeit
+- Gesamtspielzeit
+- Offsets für Spielzeit
+- Balken für Anteil an maximaler Spielzeit

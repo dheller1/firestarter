@@ -789,6 +789,7 @@ class MainWidget(QtGui.QWidget):
       except IOError:
          QtGui.QMessageBox.warning(self, "Warning", "No icon found in '%s.'" % file)
          entry.preferredIcon = -1
+         entry.LoadIcon(256) # load default icon
       
       self.AddEntry(entry)
       self.parent().SaveProfile()
