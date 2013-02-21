@@ -271,8 +271,13 @@ class EntryItem(QtGui.QListWidgetItem):
       else:
          if entry.totalTime == 0.: timeText ="Never played"
          else: timeText = formatTime(entry.totalTime) + " played"
-         
-      text = entry.label + ("\n" + timeText if self.showPlaytime else "")
+      
+      if self.showPlaytime:
+         text = entry.label + "\n" + timeText
+      elif entry.running:
+         text = entry.label + " - Currently running..."
+      else: text = entry.label
+      
       self.setText(text)
       
 class EntryListItem(EntryItem):
@@ -654,6 +659,9 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
    def clear(self):
       return self.catWdg.clear()
    
+   def clearSelection(self):
+      return self.catWdg.clearSelection()
+   
    def count(self):
       return self.catWdg.count()
    
@@ -668,6 +676,9 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
    
    def row(self, item):
       return self.catWdg.row(item)
+   
+   def selectedItems(self):
+      return self.catWdg.selectedItems()
    
    def setCurrentRow(self, row):
       return self.catWdg.setCurrentRow(row)
@@ -877,8 +888,16 @@ class MainWidget(QtGui.QWidget):
          
    def SetIconSize(self, size):
       self.iconSize = size
+      
+      if len(self.layout().currentWidget().selectedItems()) > 0:
+         curRow = self.layout().currentWidget().currentRow()
+      else: curRow = -1
       self.layout().setCurrentIndex(self.catWidgetIndices[size])
       self.activeCatWdg = self.catWidgets[size]
+      
+      if curRow >= 0:
+         self.layout().currentWidget().setCurrentRow(curRow)
+      else: self.layout().currentWidget().clearSelection()
       
    def SetNewManualOrder(self):
       """ Set the current entry order as the new manual one. """
@@ -936,11 +955,7 @@ class MainWidget(QtGui.QWidget):
             wdg.insertItem(id_a, itm_b)
             
    def UpdatePlaytime(self):
-      timeSum = 0.
-      for e in self.entries:
-         timeSum += e.totalTime
-      
-      self.PlaytimeChanged.emit(timeSum)
+      self.PlaytimeChanged.emit(sum([e.totalTime for e in self.entries]))
       
 class MainWindow(QtGui.QMainWindow):
    def __init__(self):

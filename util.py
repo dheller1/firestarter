@@ -21,7 +21,7 @@ class ProfileSettings:
       self.windowPos  = None
       self.toolsVisible = None
       self.sortMode = None
-      self.entries = []
+      #self.entries = []
 
 class EntrySettings:
    """ Container class for keeping settings specific to a single entry """
