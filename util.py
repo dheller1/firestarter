@@ -233,6 +233,15 @@ def flushLogfiles(list, codepage):
          f.write("# -*- coding: %s -*-\n" % codepage)
          f.write(time.strftime(STAMPFORMAT) + "... *** Starting program, old logfile erased *** ...\n")
          f.write("\n")
+         
+def formatTime(time):
+   """ Format a specified time (in seconds) into a nice printing format. """
+   if time < 60.: return "<1m"
+   elif time < 20.*60: return "%im %is" % (time//60, time%60)
+   elif time < 60.*60: return "%im" % (time//60)
+   elif time < 20.*60*60: return "%ih %im" %  (time//3600, (time%3600)//60)
+   elif time < 200.*60*60: return "%ih" % (time//3600)
+   else: return "%id %ih" % (time//86400, (time%86400)//3600)
 
 def din5007(input):
    """ This function implements sort keys for the german language according to 

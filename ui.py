@@ -31,7 +31,7 @@ usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox, ToolsToolbar
 from dialogs import ChooseIconDialog, EntryPropertiesDialog
-from util import din5007, ProfileSettings, FileParser
+from util import din5007, ProfileSettings, FileParser, formatTime
 
 class AppStarterEntry(QtCore.QObject):
    UpdateText = pyqtSignal()
@@ -270,12 +270,8 @@ class EntryItem(QtGui.QListWidgetItem):
       if entry.running: timeText = "Currently running..."
       else:
          if entry.totalTime == 0.: timeText ="Never played"
-         elif entry.totalTime < 60.: timeText = "<1m played"
-         elif entry.totalTime < 20.*60: timeText = "%im %is played" % (entry.totalTime//60, entry.totalTime%60)
-         elif entry.totalTime < 60.*60: timeText = "%im played" % (entry.totalTime//60)
-         elif entry.totalTime < 20.*60*60: timeText = "%ih %im played" %  (entry.totalTime//3600, (entry.totalTime%3600)//60)
-         elif entry.totalTime < 200.*60*60: timeText = "%ih played" % (entry.totalTime//3600)
-         else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
+         else: timeText = formatTime(entry.totalTime) + " played"
+         
       text = entry.label + ("\n" + timeText if self.showPlaytime else "")
       self.setText(text)
       
@@ -686,7 +682,8 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       self.catWdg.AddEntry(entry)
       
    def CurrentItemChanged(self, item):
-      self.detWdg.SetEntry(item.entry)
+      if item is not None:
+         self.detWdg.SetEntry(item.entry)
       
    def IconChanged(self):
       item = self.catWdg.currentItem()
@@ -707,6 +704,7 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       
 class MainWidget(QtGui.QWidget):
    ManualSortingEnabled = pyqtSignal()
+   PlaytimeChanged = pyqtSignal(int)
    
    def __init__(self, parent=None):
       QtGui.QWidget.__init__(self, parent)
@@ -742,16 +740,21 @@ class MainWidget(QtGui.QWidget):
          catWdg.AddEntry(entry)
          
       entry.UpdateProfile.connect(self.parent().SaveProfile)
+      entry.UpdateProfile.connect(self.UpdatePlaytime)
       
       if manuallySorted:
          self.lastManuallySortedEntries = self.entries
          self.isManuallySorted = True
+         
+      self.UpdatePlaytime()
       
    def ConnectToToolsBar(self, tb):
       for wdg in self.catWidgets.values():
          wdg.EnableReorderButtons.connect(tb.EnableButtons)
          wdg.FirstItemSelected.connect(tb.DisableUpButton)
          wdg.LastItemSelected.connect(tb.DisableDownButton)
+         
+      self.PlaytimeChanged.connect(tb.UpdatePlaytime)
       
    def InitLayout(self):
       self.iconSize = 256
@@ -931,6 +934,13 @@ class MainWidget(QtGui.QWidget):
          else:
             wdg.insertItem(id_b, itm_a)
             wdg.insertItem(id_a, itm_b)
+            
+   def UpdatePlaytime(self):
+      timeSum = 0.
+      for e in self.entries:
+         timeSum += e.totalTime
+      
+      self.PlaytimeChanged.emit(timeSum)
       
 class MainWindow(QtGui.QMainWindow):
    def __init__(self):

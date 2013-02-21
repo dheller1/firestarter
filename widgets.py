@@ -5,6 +5,8 @@ import os
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt, pyqtSignal
 
+from util import formatTime
+
 
 class IconSizeComboBox(QtGui.QComboBox):
    supportedIconSizes = (32, 48, 128, 256)
@@ -69,6 +71,7 @@ class ToolsToolbar(QtGui.QToolBar):
       QtGui.QToolBar.__init__(self, "Tools", parent)
       
       # init children
+      self.totalTime = QtGui.QLabel()
       self.iconSizeComboBox = IconSizeComboBox()
       self.sortComboBox = SortModeComboBox()
       self.upBtn = QtGui.QPushButton()
@@ -81,6 +84,7 @@ class ToolsToolbar(QtGui.QToolBar):
       dwWdg = QtGui.QWidget(self)
       dwWdg.setLayout(QtGui.QHBoxLayout())
       
+      dwWdg.layout().addWidget(self.totalTime)
       dwWdg.layout().addStretch(1)
       dwWdg.layout().addWidget(self.sortComboBox)
       dwWdg.layout().addWidget(self.upBtn)
@@ -89,16 +93,19 @@ class ToolsToolbar(QtGui.QToolBar):
       
       self.addWidget(dwWdg)
       
-   def EnableButtons(self):
-      self.upBtn.setEnabled(True)
-      self.downBtn.setEnabled(True)
-      
    def DisableDownButton(self):
       self.downBtn.setEnabled(False)
    
    def DisableUpButton(self):
       self.upBtn.setEnabled(False)
-         
+   
+   def EnableButtons(self):
+      self.upBtn.setEnabled(True)
+      self.downBtn.setEnabled(True)
+
+   def UpdatePlaytime(self, time):
+      self.totalTime.setText("Total playtime: <b>%s</b>" % formatTime(time))
+      
 class AutoSelectAllLineEdit(QtGui.QLineEdit):
    """ Custom QLineEdit which automatically selects all text if clicked. """
    def __init__(self, text="", parent=None):
