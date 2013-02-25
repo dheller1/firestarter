@@ -34,7 +34,7 @@ def main():
    else:
       with open(pidfile, 'w') as pf: pf.write(pid)
 
-   flushLogfiles(("parser.log",), 'utf-8')
+   flushLogfiles(("parser.log","steamapi.log"), 'utf-8')
    app = QtGui.QApplication(sys.argv)
    
    

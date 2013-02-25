@@ -2,6 +2,8 @@
 
 import os
 import ctypes
+import time
+import urllib
 
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt, pyqtSignal
@@ -17,9 +19,149 @@ from win32gui_struct import *
 import win32com.client
 usr32 = ctypes.windll.user32
 
-
 from widgets import IconSizeComboBox, AutoSelectAllLineEdit
+from steamapi import SteamApi
 
+
+class SteamProfileDialog(QtGui.QDialog):
+   class enterUsernameWidget(QtGui.QWidget):
+      def __init__(self, parent = None):
+         QtGui.QWidget.__init__(self, parent)
+         
+         self.usernameLe = QtGui.QLineEdit(self)
+         self.usernameLe.setFocus()
+         dlgNavLay = QtGui.QHBoxLayout()
+      
+         self.nextBtn = QtGui.QPushButton("&Next >>", self)
+         self.nextBtn.setDefault(True)
+         self.nextBtn.clicked.connect(self.parent().UsernameEntered)
+         #self.okBtn.setEnabled(False)
+      
+         self.cancelBtn = QtGui.QPushButton("&Cancel", self)
+         self.cancelBtn.clicked.connect(self.parent().reject)
+      
+         dlgNavLay.addStretch(1)
+         dlgNavLay.addWidget(self.cancelBtn)
+         dlgNavLay.addWidget(self.nextBtn)
+         
+         layout = QtGui.QGridLayout()
+         layout.addWidget(QtGui.QLabel("Please enter your Steam username (found in your profile URL):"), 0, 0, 1, 2)
+         layout.addWidget(QtGui.QLabel("http://steamcommunity.com/id/"), 1, 0, QtCore.Qt.AlignRight)
+         layout.addWidget(self.usernameLe, 1, 1)
+         layout.addLayout(dlgNavLay, 3, 0, 1, 2)
+         
+         self.setLayout(layout)
+         
+   class confirmProfileWidget(QtGui.QWidget):
+      def __init__(self, parent = None):
+         QtGui.QWidget.__init__(self, parent)
+         
+         self.avatarLbl = QtGui.QLabel()
+         self.nameLbl = QtGui.QLabel()
+         self.steamIdLbl = QtGui.QLabel()
+         self.lastOnlineLbl = QtGui.QLabel()
+         
+         layout = QtGui.QGridLayout()
+         layout.addWidget(QtGui.QLabel("Is this the correct profile?"), 0, 0, 1, 2)
+         layout.addWidget(self.avatarLbl, 1, 0, 3, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
+         layout.addWidget(self.nameLbl, 1, 1)
+         layout.addWidget(self.steamIdLbl, 2, 1)
+         layout.addWidget(self.lastOnlineLbl, 3, 1)
+         
+         layout.setRowStretch(1, 1)
+         
+         self.setLayout(layout)
+         
+      def Fill(self, playerSummary):
+         avatar = QtGui.QPixmap(os.path.join('cache', '%s.jpg' % playerSummary.steamid))
+         self.avatarLbl.setPixmap(avatar)
+         self.nameLbl.setText(playerSummary.personaname)
+         self.steamIdLbl.setText('Steam ID: %s' % playerSummary.steamid)
+         self.lastOnlineLbl.setText('Last online: '+time.ctime(float(playerSummary.lastlogoff)))
+   
+   def __init__(self, parent=None):
+      QtGui.QDialog.__init__(self, parent)
+      
+      self.setWindowTitle("Add Steam profile")
+      
+      self.confirmProfileWdg = SteamProfileDialog.confirmProfileWidget(self)
+      self.enterUsernameWdg = SteamProfileDialog.enterUsernameWidget(self)
+      
+      self.setLayout(QtGui.QStackedLayout())
+      self.layout().addWidget(self.enterUsernameWdg)
+      self.layout().addWidget(self.confirmProfileWdg)
+      
+   def UsernameEntered(self):
+      # try to fetch profile
+      username = str(self.enterUsernameWdg.usernameLe.text())
+      if len(username) == 0:
+         QtGui.QMessageBox.critical(self, "Error", "Please enter a valid Steam username!")
+         return
+      
+      steamapi = SteamApi()
+      
+      tries = 0
+      steamid = None
+      
+      self.enterUsernameWdg.cancelBtn.setEnabled(False)
+      self.enterUsernameWdg.nextBtn.setEnabled(False)
+      
+      #pd = QtGui.QProgressDialog("Requesting Steam ID ...", "&Cancel", 0, 2, self)
+      #pd.setWindowModality(QtCore.Qt.WindowModal)
+      #pd.show()
+      
+      pbLbl = QtGui.QLabel("Please wait a moment.\nRequesting Steam ID ...")
+      pb = QtGui.QProgressBar(self.enterUsernameWdg)
+      pb.setMaximum(3)
+      
+      self.enterUsernameWdg.layout().addWidget(pbLbl, 2, 0)
+      self.enterUsernameWdg.layout().addWidget(pb, 2, 1)
+      
+      while steamid == None and tries <= 10:
+         QtGui.qApp.processEvents()
+         tries += 1
+         pbLbl.setText("Please wait a moment.\nRequesting Steam ID ... (%i)" % tries)
+         self.enterUsernameWdg.repaint()
+         steamid = steamapi.GetSteamIdByUsername(username)
+         
+      if steamid == None:
+         pb.hide()
+         pbLbl.hide()
+         QtGui.QMessageBox.critical(self, "Error", "Could not fetch profile information.\nPlease check your internet connection and/or try again later.")
+
+      else:      
+         pb.setValue(1)
+         pbLbl.setText("Found profile %i!\nFetching profile summary ..." % steamid)
+         QtGui.qApp.processEvents()
+      
+         self.playerSummary = steamapi.GetPlayerSummary(steamid)
+      
+         pb.setValue(2)
+         pbLbl.setText("Received profile summary.\nDownloading your avatar ...")
+         QtGui.qApp.processEvents()
+         
+         try:
+            with open(os.path.join('cache', '%i.jpg' % steamid), 'wb') as localFile:
+               avatarFile = urllib.urlopen(self.playerSummary.avatarmedium)
+               localFile.write(avatarFile.read())
+               avatarFile.close()
+         except IOError:
+            QtGui.QMessageBox.critical(self, "Error", "Could not download avatar.\nPlease check if the subfolder 'cache' is present.")
+            self.reject()
+            return
+         
+         pb.setValue(3)
+         pbLbl.setText("Downloaded Avatar ... Proceeding.")
+         QtGui.qApp.processEvents()
+         time.sleep(0.6)
+         
+         # proceed to next dialog page
+         self.layout().setCurrentWidget(self.confirmProfileWdg)
+         self.confirmProfileWdg.Fill(self.playerSummary)
+      
+      self.enterUsernameWdg.nextBtn.setEnabled(True)
+      self.enterUsernameWdg.cancelBtn.setEnabled(True)
+      
 
 class ChooseIconDialog(QtGui.QDialog):
    """ Dialog which loads icons from one or several files, displays them in a list widget, and allows to choose one of them.

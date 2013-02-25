@@ -35,7 +35,21 @@ class EntrySettings:
       self.position = None
       self.totalTime = None
 
-class FileParser:
+class LogHandler:
+   def __init__(self, logEnabled = True):
+      self.logEnabled = logEnabled
+      self.logCodepage= 'utf-8'
+      
+   def _Log(self, text):
+      """ Add text to log file, if logging is enabled. """
+      if self.logEnabled:
+         if not self.logFile:
+            raise IOError('No logfile specified for log handler class!', self)
+         with codecs.open(self.logFile, 'a', self.logCodepage) as f:
+            timestamp = time.strftime(STAMPFORMAT)
+            f.write(timestamp + text + '\n')
+
+class FileParser(LogHandler):
    # dictionary with main profile format specifiers, accessed by format version
    profileFormats = {
     '0.1a': [ ('iconSize', int),
@@ -63,19 +77,11 @@ class FileParser:
               ('totalTime', float) ] }
    
    def __init__(self, logEnabled = True):
-      self.logEnabled = logEnabled
+      LogHandler.__init__(self, logEnabled)
       self.logFile    = 'parser.log'
-      self.logCodepage= 'utf-8'
       
       if logEnabled:
          self._Log("Creating file parser object.")
-   
-   def _Log(self, text):
-      """ Add text to log file, if logging is enabled. """
-      if self.logEnabled:
-         with codecs.open(self.logFile, 'a', self.logCodepage) as f:
-            timestamp = time.strftime(STAMPFORMAT)
-            f.write(timestamp + text + '\n')
    
    def ParseByVersion(self, file, handler, version, type):
       """ Calls parse with the correct format specifier determind by version string (e.g. '0.1a') and type, which must be either

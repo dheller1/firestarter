@@ -30,7 +30,7 @@ import win32com.client
 usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox, ToolsToolbar
-from dialogs import ChooseIconDialog, EntryPropertiesDialog
+from dialogs import *
 from util import din5007, ProfileSettings, FileParser, formatTime
 
 class AppStarterEntry(QtCore.QObject):
@@ -991,6 +991,10 @@ class MainWindow(QtGui.QMainWindow):
    def resizeEvent(self, e):
       pass
    
+   def ConnectToSteamProfile(self):
+      dlg = SteamProfileDialog(self)
+      dlg.exec_()
+   
    def InitConnections(self):
       self.toolsBar.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)
       self.toolsBar.upBtn.clicked.connect(self.centralWidget().MoveItemUp)
@@ -1005,7 +1009,9 @@ class MainWindow(QtGui.QMainWindow):
    def InitMenus(self):
       self.settingsMenu = SettingsMenu(self, self.centralWidget().iconSize)
       self.viewMenu = ViewMenu(self, showTools=self.toolsBar.toggleViewAction())
+      self.fileMenu = FileMenu(self)
       
+      self.menuBar().addMenu(self.fileMenu)
       self.menuBar().addMenu(self.viewMenu)
       self.menuBar().addMenu(self.settingsMenu)
       
@@ -1161,9 +1167,6 @@ class SettingsMenu(QtGui.QMenu):
          if size == iconSize: act.setChecked(True)
          self.iconSizeActions.addAction(act)
          iconSizes.addAction(act)
-         
-      # profiles
-      self.profileMenu = self.addMenu(ProfileMenu(self))
       
       self.InitConnections()
    
@@ -1181,18 +1184,19 @@ class SettingsMenu(QtGui.QMenu):
    def InitConnections(self):
       self.iconSizeActions.triggered.connect(self.parent().UpdateIconSizeFromMenu)
       
-class ProfileMenu(QtGui.QMenu):
+class FileMenu(QtGui.QMenu):
    def __init__(self, parent=None):
-      QtGui.QMenu.__init__(self, "Switch &profile", parent)
+      QtGui.QMenu.__init__(self, "&File", parent)
       
-      profiles = QtGui.QActionGroup(self)
+      self.steamProfileAction = QtGui.QAction("Add &Steam profile", self)
+      self.exitAction = QtGui.QAction("E&xit", self)
       
-      files = os.listdir(".")
-      for f in files:
-         if f.endswith(".dat"):
-            act = QtGui.QAction(f, profiles)
-            if f.startswith(os.environ.get("USERNAME")):
-               act.setChecked(True)
-               print f
-            profiles.addAction(act)
-            self.addAction(act)
+      self.addAction(self.steamProfileAction)
+      self.addSeparator()
+      self.addAction(self.exitAction)
+      
+      self.InitConnections()
+      
+   def InitConnections(self):
+      self.steamProfileAction.triggered.connect(self.parent().ConnectToSteamProfile)
+      self.exitAction.triggered.connect(self.parent().close)
