@@ -11,14 +11,19 @@ import urllib
 import xml.dom.minidom
 import xml.parsers.expat
 from util import LogHandler
+from PyQt4 import QtGui, QtCore
+
 
 username = 'hasustyle'
 
-class PlayerSummary:
+class PlayerSummary(object):
    def __init__(self):
       pass
 
 class SteamApi(LogHandler):
+   
+   ERR_INVALID_USER = 1
+   
    auth_key = '383C363E19CFA9A8B5C0A576CE8E253D'
    
    def __init__(self, logEnabled = True):
@@ -29,7 +34,12 @@ class SteamApi(LogHandler):
          self._Log("Creating Steam API object.")
          
    def GetPlayerSummary(self, steamid):
-      return self.GetPlayerSummaries((steamid,))[0]
+      self._Log("Requesting player summary for steam ID %i" % steamid)
+      res = self.GetPlayerSummaries((steamid,))
+      if len(res) > 0:
+         return res[0]
+      else:
+         return None 
          
    def GetPlayerSummaries(self, steamids):
       if len(steamids) < 1: return
@@ -41,7 +51,7 @@ class SteamApi(LogHandler):
          request += '%s,' % str(id)
       request = request[:-1] # cut the last comma
       
-      self._Log("Trying to fetch player summaries: %s" % request)
+      self._Log("Player summaries query: %s" % request)
       # fetch result
       f = urllib.urlopen(request)
       summaries = json.load(f, encoding='utf-8')["response"]["players"]
@@ -55,6 +65,9 @@ class SteamApi(LogHandler):
          
          playerSummaries.append(ps)
          
+      self._Log("Received %i player summaries." % len(playerSummaries))
+      
+      # for invalid steam id, this list will be empty!
       return playerSummaries
       
    
@@ -70,21 +83,20 @@ class SteamApi(LogHandler):
       f = urllib.urlopen(request)
       profile = f.read()
       f.close()
-         
+      
       try:
          xmlString = xml.dom.minidom.parseString(profile.encode('utf-8'))
       except xml.parsers.expat.ExpatError:
          self._Log("Failed to fetch profile ID after %.2f seconds." % (time.clock()-startTime))
          return None
       
-      id_unicode = xmlString.getElementsByTagName('steamID64')[0].firstChild.wholeText
-      id = int(id_unicode)   
+      try:
+         id_unicode = xmlString.getElementsByTagName('steamID64')[0].firstChild.wholeText
+      except IndexError: # steamID64 not found
+         self._Log("Invalid profile, response does not contain 'steamID64' (username: %s)" % username)
+         return SteamApi.ERR_INVALID_USER
+      
+      id = int(id_unicode)
       self._Log("Received profile ID %i after %.2f seconds." % (id, time.clock()-startTime))
       
       return id
-
-
-s = SteamApi()
-#id = s.GetSteamIdByUsername('hasustyle')
-id = 76561197968959644
-s.GetPlayerSummaries((id,))

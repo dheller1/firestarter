@@ -4,6 +4,7 @@ import os
 import ctypes
 import time
 import urllib
+import threading
 
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt, pyqtSignal
@@ -24,6 +25,14 @@ from steamapi import SteamApi
 
 
 class SteamProfileDialog(QtGui.QDialog):
+   FailedSteamIdQuery = pyqtSignal()
+   FailedPlayerSummaryQuery = pyqtSignal()
+   FailedAvatarDl = pyqtSignal()
+   InvalidUserQuery = pyqtSignal()
+   SuccessfulAvatarDl = pyqtSignal()
+   SuccessfulSteamIdQuery = pyqtSignal(str)
+   SuccessfulPlayerSummaryQuery = pyqtSignal(object)
+   
    class enterUsernameWidget(QtGui.QWidget):
       def __init__(self, parent = None):
          QtGui.QWidget.__init__(self, parent)
@@ -72,16 +81,26 @@ class SteamProfileDialog(QtGui.QDialog):
          
          self.setLayout(layout)
          
-      def Fill(self, playerSummary):
+      def Fill(self, username, playerSummary):
          avatar = QtGui.QPixmap(os.path.join('cache', '%s.jpg' % playerSummary.steamid))
+         if avatar.isNull():
+            avatar = QtGui.QPixmap(os.path.join('gfx', 'noavatar.png'))
          self.avatarLbl.setPixmap(avatar)
-         self.nameLbl.setText(playerSummary.personaname)
-         self.steamIdLbl.setText('Steam ID: %s' % playerSummary.steamid)
-         self.lastOnlineLbl.setText('Last online: '+time.ctime(float(playerSummary.lastlogoff)))
+         self.nameLbl.setText('<b>%s</b> (%s)' % (username, playerSummary.personaname))
+         self.steamIdLbl.setText('Steam ID: <b>%s</b>' % playerSummary.steamid)
+         
+         if int(playerSummary.personastate) == 0:
+            timeStr = time.strftime('%a %d. %b %Y, %H:%M', time.localtime(float(playerSummary.lastlogoff)))
+            self.lastOnlineLbl.setText('Last online: <b>%s</b>' % timeStr)
+         else:
+            self.lastOnlineLbl.setText('<span style="color: green;"><b>Currently online</b></span>')
    
    def __init__(self, parent=None):
       QtGui.QDialog.__init__(self, parent)
       
+      self.steamapi = SteamApi()
+      self.tries = 0
+            
       self.setWindowTitle("Add Steam profile")
       
       self.confirmProfileWdg = SteamProfileDialog.confirmProfileWidget(self)
@@ -91,76 +110,161 @@ class SteamProfileDialog(QtGui.QDialog):
       self.layout().addWidget(self.enterUsernameWdg)
       self.layout().addWidget(self.confirmProfileWdg)
       
-   def UsernameEntered(self):
-      # try to fetch profile
-      username = str(self.enterUsernameWdg.usernameLe.text())
-      if len(username) == 0:
-         QtGui.QMessageBox.critical(self, "Error", "Please enter a valid Steam username!")
+      # init connections
+      self.FailedSteamIdQuery.connect(self.RetrySteamIdQuery)
+      self.FailedPlayerSummaryQuery.connect(self.NoPlayerSummaryFound)
+      self.FailedAvatarDl.connect(self.AvatarNotReceived)
+      self.InvalidUserQuery.connect(self.InvalidUsernameDetected)
+      self.SuccessfulSteamIdQuery.connect(self.SteamIdReceived)
+      self.SuccessfulPlayerSummaryQuery.connect(self.PlayerSummaryReceived)
+      self.SuccessfulAvatarDl.connect(self.AvatarReceived)
+      
+   def Thread_DownloadAvatar(self, url, steamid):
+      try:
+         with open(os.path.join('cache', '%i.jpg' % steamid), 'wb') as localFile:
+            avatarFile = urllib.urlopen(url)
+            localFile.write(avatarFile.read())
+            avatarFile.close()
+      except IOError:
+         self.FailedAvatarDl.emit()
          return
-      
-      steamapi = SteamApi()
-      
-      tries = 0
-      steamid = None
-      
-      self.enterUsernameWdg.cancelBtn.setEnabled(False)
-      self.enterUsernameWdg.nextBtn.setEnabled(False)
-      
-      #pd = QtGui.QProgressDialog("Requesting Steam ID ...", "&Cancel", 0, 2, self)
-      #pd.setWindowModality(QtCore.Qt.WindowModal)
-      #pd.show()
-      
-      pbLbl = QtGui.QLabel("Please wait a moment.\nRequesting Steam ID ...")
-      pb = QtGui.QProgressBar(self.enterUsernameWdg)
-      pb.setMaximum(3)
-      
-      self.enterUsernameWdg.layout().addWidget(pbLbl, 2, 0)
-      self.enterUsernameWdg.layout().addWidget(pb, 2, 1)
-      
-      while steamid == None and tries <= 10:
-         QtGui.qApp.processEvents()
-         tries += 1
-         pbLbl.setText("Please wait a moment.\nRequesting Steam ID ... (%i)" % tries)
-         self.enterUsernameWdg.repaint()
-         steamid = steamapi.GetSteamIdByUsername(username)
-         
-      if steamid == None:
-         pb.hide()
-         pbLbl.hide()
-         QtGui.QMessageBox.critical(self, "Error", "Could not fetch profile information.\nPlease check your internet connection and/or try again later.")
 
-      else:      
-         pb.setValue(1)
-         pbLbl.setText("Found profile %i!\nFetching profile summary ..." % steamid)
-         QtGui.qApp.processEvents()
+      self.SuccessfulAvatarDl.emit()
       
-         self.playerSummary = steamapi.GetPlayerSummary(steamid)
+   def Thread_GetSteamIdByUsername(self, username):
+      # start query ... this takes a while
+      steamid = self.steamapi.GetSteamIdByUsername(username)
       
-         pb.setValue(2)
-         pbLbl.setText("Received profile summary.\nDownloading your avatar ...")
-         QtGui.qApp.processEvents()
+      if steamid is None:
+         self.FailedSteamIdQuery.emit()
+      elif steamid is SteamApi.ERR_INVALID_USER:
+         self.InvalidUserQuery.emit()
+      else:
+         self.SuccessfulSteamIdQuery.emit(str(steamid))
+   
+   def Thread_GetPlayerSummary(self, steamid):
+      # start query ... this might take a bit
+      playerSummary = self.steamapi.GetPlayerSummary(steamid)
+      
+      if playerSummary is None:
+         self.FailedPlayerSummaryQuery.emit()
+      else:
+         self.SuccessfulPlayerSummaryQuery.emit(playerSummary)
+      
+   def CancelSteamQueries(self):
+      self.progressBar.hide()
+      self.pbLbl.hide()
+      self.enterUsernameWdg.nextBtn.setEnabled(True)
+      self.enterUsernameWdg.cancelBtn.setEnabled(True)
+      self.enterUsernameWdg.usernameLe.setEnabled(True)
+      
+   def RetrySteamIdQuery(self):
+      if self.tries >= 10:
+         self.CancelSteamQueries()
+         QtGui.QMessageBox.critical(self, "Error", "Could not fetch profile information.\nPlease check your internet connection and/or try again later.")
+         return
+
+      self.progressBar.setValue(self.tries)
+      self.pbLbl.setText("Please wait a moment.\nRequesting Steam ID ... (%i)" % self.tries)
+      self.tries += 1
+      
+      queryThread = threading.Thread(target=self.Thread_GetSteamIdByUsername, args=(self.username,))
+      queryThread.start()
+      
+   def SteamIdReceived(self, steamid):
+      self.progressBar.setValue(10)
+      self.pbLbl.setText("Found profile %s!\nFetching profile summary ..." % steamid)
+      
+      self.steamId = int(steamid)
+      
+      # start player summary query
+      queryThread = threading.Thread(target=self.Thread_GetPlayerSummary, args=(int(steamid),))
+      queryThread.start()
+      
+   def NoPlayerSummaryFound(self):
+      result = QtGui.QMessageBox.critical(self, "Error", "Could not find player information for steam ID %i." % self.steamId, QtGui.QMessageBox.Retry | QtGui.QMessageBox.Cancel)
+      if result == QtGui.QMessageBox.Retry:
+         self.tries = 0
+         self.RetrySteamIdQuery
          
-         try:
-            with open(os.path.join('cache', '%i.jpg' % steamid), 'wb') as localFile:
-               avatarFile = urllib.urlopen(self.playerSummary.avatarmedium)
-               localFile.write(avatarFile.read())
-               avatarFile.close()
-         except IOError:
-            QtGui.QMessageBox.critical(self, "Error", "Could not download avatar.\nPlease check if the subfolder 'cache' is present.")
-            self.reject()
-            return
-         
-         pb.setValue(3)
-         pbLbl.setText("Downloaded Avatar ... Proceeding.")
-         QtGui.qApp.processEvents()
-         time.sleep(0.6)
-         
-         # proceed to next dialog page
-         self.layout().setCurrentWidget(self.confirmProfileWdg)
-         self.confirmProfileWdg.Fill(self.playerSummary)
+      elif result == QtGui.QMessageBox.Cancel:
+         self.CancelSteamQueries()
+   
+   def InvalidUsernameDetected(self):
+      QtGui.QMessageBox.critical(self, "Error", "Steam did not return a profile for username %s.\nPlease check the username and try again." % self.username)
+      self.CancelSteamQueries()
+      self.enterUsernameWdg.usernameLe.selectAll()
+      self.enterUsernameWdg.usernameLe.setFocus()
+   
+   def PlayerSummaryReceived(self, playerSummary):
+      self.progressBar.setValue(20)
+      self.pbLbl.setText("Received profile summary.\nDownloading avatar ...")
+      
+      self.playerSummary = playerSummary
+      
+      queryThread = threading.Thread(target=self.Thread_DownloadAvatar, args=(playerSummary.avatarmedium, self.steamId))
+      queryThread.start()
+      
+   def AvatarReceived(self):
+      self.progressBar.setValue(25)
+      self.pbLbl.setText("Downloaded Avatar ... Proceeding.")
+      QtGui.qApp.processEvents()
+      time.sleep(0.6)
+      
+      # proceed to next dialog page
+      self.layout().setCurrentWidget(self.confirmProfileWdg)
+      self.confirmProfileWdg.Fill(self.username, self.playerSummary)
       
       self.enterUsernameWdg.nextBtn.setEnabled(True)
       self.enterUsernameWdg.cancelBtn.setEnabled(True)
+      
+   def AvatarNotReceived(self):
+      result = QtGui.QMessageBox.warning(self, "Warning", "Unable to download avatar. Please check if the folder 'cache' exists in your FireStarter directory.", QtGui.QMessageBox.Retry | QtGui.QMessageBox.Ignore | QtGui.QMessageBox.Cancel)
+      
+      if result == QtGui.QMessageBox.Retry:
+         # try again
+         queryThread = threading.Thread(target=self.Thread_DownloadAvatar, args=(self.playerSummary.avatarmedium, self.steamId))
+         queryThread.start()
+      
+      elif result == QtGui.QMessageBox.Ignore:
+         # proceed to next dialog page
+         self.layout().setCurrentWidget(self.confirmProfileWdg)
+         self.confirmProfileWdg.Fill(self.username, self.playerSummary)
+         
+         self.enterUsernameWdg.nextBtn.setEnabled(True)
+         self.enterUsernameWdg.cancelBtn.setEnabled(True)
+      
+      elif result == QtGui.QMessageBox.Cancel:
+         self.CancelSteamQueries()
+         
+      return
+      
+   def UsernameEntered(self):
+      # try to fetch profile
+      self.username = str(self.enterUsernameWdg.usernameLe.text())
+      if len(self.username) == 0:
+         QtGui.QMessageBox.critical(self, "Error", "Please enter a valid Steam username!")
+         return
+      
+      self.tries = 0
+      
+      self.enterUsernameWdg.cancelBtn.setEnabled(False)
+      self.enterUsernameWdg.nextBtn.setEnabled(False)
+      self.enterUsernameWdg.usernameLe.setEnabled(False)
+      
+      self.pbLbl = QtGui.QLabel("Please wait a moment.\nRequesting Steam ID ... (1)")
+      self.progressBar = QtGui.QProgressBar(self.enterUsernameWdg)
+      self.progressBar.setMaximum(30) # 0-10 = 10 tries of receiving steam ID, 10-20 = Summary, 20-25 = Avatar, 25-30 = finished
+      
+      self.enterUsernameWdg.layout().addWidget(self.pbLbl, 2, 0)
+      self.enterUsernameWdg.layout().addWidget(self.progressBar, 2, 1)
+      
+      # start query thread and return, waiting for the Thread's finished signal
+      self.tries += 1
+      queryThread = threading.Thread(target=self.Thread_GetSteamIdByUsername, args=(self.username,))
+      queryThread.start()
+      
+      return
       
 
 class ChooseIconDialog(QtGui.QDialog):
