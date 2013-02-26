@@ -22,6 +22,15 @@ class ProfileSettings:
       self.toolsVisible = None
       self.sortMode = None
       #self.entries = []
+      
+   def Default():
+      d = ProfileSettings()
+      d.iconSize = 128
+      d.numEntries = 0
+      d.windowSize = (800,600)
+      d.windowPos = (0,0)
+      d.toolsVisible = 1
+      d.sortMode = "manual"
 
 class EntrySettings:
    """ Container class for keeping settings specific to a single entry """
@@ -34,6 +43,17 @@ class EntrySettings:
       self.preferredIcon = None
       self.position = None
       self.totalTime = None
+      
+   def Default():
+      d = EntrySettings()
+      d.filename = ""
+      d.workingDir = ""
+      d.label = "Unknown entry"
+      d.cmdLineArgs = ""
+      d.iconPath = ""
+      d.preferredIcon = -1
+      d.position = 0
+      d.totalTime = 0.
 
 class LogHandler:
    def __init__(self, logEnabled = True):
@@ -82,20 +102,54 @@ class FileParser(LogHandler):
       
       if logEnabled:
          self._Log("Creating file parser object.")
+         
+   def CompleteEntry(self, handler, version):
+      """ Fills all entry parameters which still are None with their default values. This should be called after loading an
+         entry to have consistent data in it. Returns the number of modified variables. """
+      count = 0
+      
+      try: fmt = FileParser.entryFormats[version]
+      except KeyError:
+         raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
+         return 0
+      
+      #self._Log("Completing entry with default values according to version %s." % version)
+      for var, type in fmt:
+         if getattr(handler, var) is None:
+            setattr(handler, var, getattr(EntrySettings.Default(), var))
+            count += 1
+      self._Log("Completed entry by setting %i variables to their default values." % count)
+         
+   def CompleteProfile(self, handler, version):
+      """ Fills all profile parameters which still are None with their default values. This should be called after loading a
+         profile to have consistent data in it. Returns the number of modified entries. """
+      count = 0
+      
+      try: fmt = FileParser.profileFormats[version]
+      except KeyError:
+         raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse profile.' % version)
+         return 0
+      
+      #self._Log("Completing profile with default values according to version %s." % version)
+      for var, type in fmt:
+         if getattr(handler, var) is None:
+            setattr(handler, var, getattr(ProfileSettings.Default(), var))
+            count += 1
+      self._Log("Completed profile by setting %i variables to their default values." % count)
    
    def ParseByVersion(self, file, handler, version, type):
       """ Calls parse with the correct format specifier determind by version string (e.g. '0.1a') and type, which must be either
-          'profile' or 'entry' to parse profile or entry settings, respectively. """
+         'profile' or 'entry' to parse profile or entry settings, respectively. """
       self._Log("Requesting file format specifier for version '%s' (%s)." % (version, type))
       if type == 'profile':
          try: fmt = FileParser.profileFormats[version]
          except KeyError:
-            raise KeyError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse profile.' % version)
+            raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse profile.' % version)
             return
       elif type == 'entry':
          try: fmt = FileParser.entryFormats[version]
          except KeyError:
-            raise KeyError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
+            raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
             return
       else:
          raise ValueError('FileParser error: Invalid type argument for ParseByVersion: \'%s\' - must be \'profile\' or \'entry\'!' % type)
@@ -163,12 +217,12 @@ class FileParser(LogHandler):
       if type == 'profile':
          try: fmt = FileParser.profileFormats[version]
          except KeyError:
-            raise KeyError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse profile.' % version)
+            raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse profile.' % version)
             return
       elif type == 'entry':
          try: fmt = FileParser.entryFormats[version]
          except KeyError:
-            raise KeyError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
+            raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
             return
       else:
          raise ValueError('FileParser error: Invalid type argument for ParseByVersion: \'%s\' - must be \'profile\' or \'entry\'!' % type)
@@ -242,7 +296,7 @@ def flushLogfiles(list, codepage):
          
 def formatTime(time):
    """ Format a specified time (in seconds) into a nice printing format. """
-   if time < 60.: return "<1m"
+   if time < 60.: return "< 1m"
    elif time < 20.*60: return "%im %is" % (time//60, time%60)
    elif time < 60.*60: return "%im" % (time//60)
    elif time < 20.*60*60: return "%ih %im" %  (time//3600, (time%3600)//60)

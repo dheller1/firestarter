@@ -71,7 +71,7 @@ class ToolsToolbar(QtGui.QToolBar):
       QtGui.QToolBar.__init__(self, "Tools", parent)
       
       # init children
-      self.totalTime = QtGui.QLabel()
+      self.totalTime = QtGui.QLabel("Total playtime: <b>Never played</b>")
       self.iconSizeComboBox = IconSizeComboBox()
       self.sortComboBox = SortModeComboBox()
       self.upBtn = QtGui.QPushButton()
@@ -104,7 +104,7 @@ class ToolsToolbar(QtGui.QToolBar):
       self.downBtn.setEnabled(True)
 
    def UpdatePlaytime(self, time):
-      self.totalTime.setText("Total playtime: <b>%s</b>" % formatTime(time))
+      self.totalTime.setText("Total playtime: <b>%s</b>" % formatTime(time).replace('<', '&lt;'))
       
 class AutoSelectAllLineEdit(QtGui.QLineEdit):
    """ Custom QLineEdit which automatically selects all text if clicked. """

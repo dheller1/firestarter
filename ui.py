@@ -31,7 +31,7 @@ usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox, ToolsToolbar
 from dialogs import *
-from util import din5007, ProfileSettings, FileParser, formatTime
+from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime
 
 class AppStarterEntry(QtCore.QObject):
    UpdateText = pyqtSignal()
@@ -932,7 +932,6 @@ class MainWidget(QtGui.QWidget):
       entries = sorted(self.entries, key=lambda entry: din5007(entry.label))
       self.Refill(entries)
       
-      
    def SwapItems(self, id_a, id_b):
       e_a = self.entries[id_a]
       e_b = self.entries[id_b]
@@ -1016,8 +1015,10 @@ class MainWindow(QtGui.QMainWindow):
       self.menuBar().addMenu(self.settingsMenu)
       
    def LoadProfile(self, filename=None):
-      profileVersion = '0.1b'
-      entryVersion   = '0.1a'
+      bestProfileVersion = '0.1b'
+      bestEntryVersion   = '0.1a'
+      
+      backupProfile = False
       
       if filename is None: filename = '%s.dat' % self.profile
       if not os.path.exists(filename): return
@@ -1046,37 +1047,57 @@ class MainWindow(QtGui.QMainWindow):
       with codecs.open(filename, 'r', codepage) as f:
          f.readline() # skip codepage
          
-         fmt = f.readline().strip() # read file format version
-         if fmt != profileVersion:
-            QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for profile '%s'!\nAborting load process." % (fmt, filename))
+         profileVersion = f.readline().strip() # read file format version
+         if profileVersion not in FileParser.profileFormats:
+            QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for profile '%s'!\nAborting load process." % (profileVersion, filename))
             return
          try: fp.ParseByVersion(file=f, handler=p, version=profileVersion, type='profile')
          except ValueError as e:
             QtGui.QMessageBox.critical(self, "Profile loading error", str(e))
             return
          
+         if bestProfileVersion != profileVersion:
+            count = fp.CompleteProfile(p, bestProfileVersion)
+            backupProfile = True
+            if count > 0:
+               QtGui.QMessageBox.information(self, "Information", "Your profile has been updated to a newer version.\n"\
+                        + "Should any problems occur, a backup is available: %s" % (filename+"."+profileVersion))
+         
          for i in range(p.numEntries):
-            fmt = f.readline().strip() # read file format version
-            if fmt != entryVersion:
-               QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for entry in profile '%s'!\nAborting load process." % (fmt, filename))
+            entryVersion = f.readline().strip() # read file format version
+            if entryVersion not in FileParser.entryFormats:
+               QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for entry in profile '%s'!\nAborting load process." % (entryVersion, filename))
                return
             
             entry = AppStarterEntry(parentWidget=self.centralWidget())
+            eHndlr = EntrySettings()
             
             try:
-               fp.ParseByVersion(file=f, handler=entry, version=entryVersion, type='entry')
+               fp.ParseByVersion(file=f, handler=eHndlr, version=entryVersion, type='entry')
             except ValueError as e:
                QtGui.QMessageBox.critical(self, "Profile loading error (entry)", str(e))
                return
             except EOFError:
                QtGui.QMessageBox.critical(self, "End of file error", "Unable to load entry %i from profile '%s'!\nEntries might be incomplete." % (i+1, filename))
                continue
+            
+            if bestEntryVersion != entryVersion:
+               count = fp.CompleteEntry(eHndlr, bestEntryVersion)
+               backupProfile = True
+               if count > 0:
+                  QtGui.QMessageBox.information(self, "Information", "Your profile has been updated to a newer version.\n"\
+                        + "Should any problems occur, a backup is available: %s" % (filename+"."+profileVersion))
+                  
+            # copy data from EntrySettings object to actual entry
+            for var, type in FileParser.entryFormats[bestEntryVersion]:
+                setattr(entry, var, getattr(eHndlr, var))
+            
             entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
-            #try:
-            #   entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
-            #except IOError: pass
                
             self.centralWidget().AddEntry(entry, manuallySorted=True) # always add as manually sorted, might be overwritten later
+            
+      if backupProfile:
+         shutil.copy(filename, filename+"."+profileVersion)
             
       # apply settings      
       try: self.SetIconSize(p.iconSize)
