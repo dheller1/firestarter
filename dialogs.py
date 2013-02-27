@@ -119,6 +119,9 @@ class SteamProfileDialog(QtGui.QDialog):
       self.SuccessfulPlayerSummaryQuery.connect(self.PlayerSummaryReceived)
       self.SuccessfulAvatarDl.connect(self.AvatarReceived)
       
+   def __del__(self):
+      self.steamapi.__del__()
+      
    def Thread_DownloadAvatar(self, url, steamid):
       try:
          with open(os.path.join('cache', '%i.jpg' % steamid), 'wb') as localFile:

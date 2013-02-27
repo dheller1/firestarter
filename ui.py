@@ -977,12 +977,14 @@ class MainWindow(QtGui.QMainWindow):
       self.InitConnections()
       
       # init profile      
+      self.fileParser = FileParser()
       self.profile = os.environ.get("USERNAME")
       self.LoadProfile()
       
    def __del__(self):
       #print "Saving profile prior to closing program..."
       self.SaveProfile()
+      self.fileParser.__del__()
       
    def moveEvent(self, e):
       pass
@@ -1041,7 +1043,7 @@ class MainWindow(QtGui.QMainWindow):
          return error
       
       p = ProfileSettings()
-      fp = FileParser()
+      fp = self.fileParser
       
       # open file
       with codecs.open(filename, 'r', codepage) as f:
@@ -1135,7 +1137,7 @@ class MainWindow(QtGui.QMainWindow):
       p.toolsVisible = self.viewMenu.showTools.isChecked()
       p.sortMode = self.centralWidget().sortMode
       
-      fp = FileParser()
+      fp = self.fileParser
       
       #startTime = time.clock()
       with codecs.open(filename, 'w', codepage) as f:

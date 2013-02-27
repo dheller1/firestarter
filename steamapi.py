@@ -23,15 +23,16 @@ class PlayerSummary(object):
 class SteamApi(LogHandler):
    
    ERR_INVALID_USER = 1
-   
    auth_key = '383C363E19CFA9A8B5C0A576CE8E253D'
    
    def __init__(self, logEnabled = True):
-      LogHandler.__init__(self, logEnabled)
-      self.logFile    = 'steamapi.log'
+      LogHandler.__init__(self, logEnabled, 'steamapi.log')
       
       if logEnabled:
          self._Log("Creating Steam API object.")
+         
+   def __del__(self):
+      LogHandler.__del__(self)
          
    def GetPlayerSummary(self, steamid):
       self._Log("Requesting player summary for steam ID %i" % steamid)

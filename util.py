@@ -7,6 +7,7 @@
 
 import codecs
 import time
+import threading
 from types import *
 
 STAMPFORMAT = '(%d.%m.%Y - %H:%M:%S) '
@@ -56,18 +57,58 @@ class EntrySettings:
       d.totalTime = 0.
 
 class LogHandler:
-   def __init__(self, logEnabled = True):
+   """ Abstract base class for an object with logging capabilities.
+     Logs are written to a logfile specified when creating the object, writing operations are done by a
+     separate thread in regular intervals, so don't be afraid to log often and much, the main program will not
+     be delayed by this.
+      
+     When subclassing this class, make sure to call LogHandler.__del__ in the new destructor, otherwise
+     the logging thread might not exit correctly. Look for 'Stopping logger thread.' lines in the logfile,
+     if these are not present, the thread was probably killed too soon. """
+   def __init__(self, logEnabled = True, logFile = None):
       self.logEnabled = logEnabled
       self.logCodepage= 'utf-8'
+      self.logFile = logFile
+      
+      self._logsToWrite = []
+      
+      self._runLoggerThread = True
+      self._loggerThread = threading.Thread(target=self._LoggerLoop)
+      self._loggerThread.daemon = True # killed automatically on closing the program.
+      self._loggerThread.start()
+      
+   def __del__(self):
+      # stop logger thread
+      self._Log("Stopping logger thread.")
+      self._runLoggerThread = False
+      self._loggerThread.join(timeout=5) # wait for logger thread to finish
+      if self._loggerThread.isAlive():
+         raise Exception('Failed to terminate logger thread. Please kill the program manually. Log files might be corrupt.')
       
    def _Log(self, text):
       """ Add text to log file, if logging is enabled. """
       if self.logEnabled:
+         timestamp = time.strftime(STAMPFORMAT)
+         self._logsToWrite.append(timestamp + text + '\n') # append is thread safe
+            
+   def _LoggerLoop(self):
+      self._Log("Logger thread running.")
+      while self._runLoggerThread:
+         while len(self._logsToWrite) > 0:
+            newLog = self._logsToWrite.pop(0)
+            if not self.logFile:
+               raise IOError('No logfile specified for log handler class!', self)
+            with codecs.open(self.logFile, 'a', self.logCodepage) as f:
+               f.write(newLog)
+         time.sleep(0.3)
+      
+      # write remaining logs and then quit
+      while len(self._logsToWrite) > 0:
+         newLog = self._logsToWrite.pop(0)
          if not self.logFile:
             raise IOError('No logfile specified for log handler class!', self)
          with codecs.open(self.logFile, 'a', self.logCodepage) as f:
-            timestamp = time.strftime(STAMPFORMAT)
-            f.write(timestamp + text + '\n')
+            f.write(newLog)
 
 class FileParser(LogHandler):
    # dictionary with main profile format specifiers, accessed by format version
@@ -97,11 +138,13 @@ class FileParser(LogHandler):
               ('totalTime', float) ] }
    
    def __init__(self, logEnabled = True):
-      LogHandler.__init__(self, logEnabled)
-      self.logFile    = 'parser.log'
+      LogHandler.__init__(self, logEnabled, 'parser.log')
       
       if logEnabled:
          self._Log("Creating file parser object.")
+         
+   def __del__(self):
+      LogHandler.__del__(self)
          
    def CompleteEntry(self, handler, version):
       """ Fills all entry parameters which still are None with their default values. This should be called after loading an
