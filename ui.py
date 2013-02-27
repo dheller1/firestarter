@@ -978,7 +978,8 @@ class MainWindow(QtGui.QMainWindow):
       
       # init profile      
       self.fileParser = FileParser()
-      self.profile = os.environ.get("USERNAME")
+      self.profile = ProfileSettings()
+      self.profileName = os.environ.get("USERNAME")
       self.LoadProfile()
       
    def __del__(self):
@@ -994,7 +995,11 @@ class MainWindow(QtGui.QMainWindow):
    
    def ConnectToSteamProfile(self):
       dlg = SteamProfileDialog(self)
-      dlg.exec_()
+      result = dlg.exec_()
+      if result == QtGui.QDialog.Accepted:
+         self.profile.steamId = dlg.steamId
+         print self.profile.steamId
+         self.SaveProfile()
    
    def InitConnections(self):
       self.toolsBar.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)
@@ -1017,12 +1022,12 @@ class MainWindow(QtGui.QMainWindow):
       self.menuBar().addMenu(self.settingsMenu)
       
    def LoadProfile(self, filename=None):
-      bestProfileVersion = '0.1b'
+      bestProfileVersion = '0.1c'
       bestEntryVersion   = '0.1a'
       
       backupProfile = False
       
-      if filename is None: filename = '%s.dat' % self.profile
+      if filename is None: filename = '%s.dat' % self.profileName
       if not os.path.exists(filename): return
       
       shutil.copyfile(filename, "~"+filename+".bak")
@@ -1117,18 +1122,18 @@ class MainWindow(QtGui.QMainWindow):
       else: self.centralWidget().sortMode = p.sortMode
       self.centralWidget().SortByCurrentSortMode()
       self.toolsBar.sortComboBox.setCurrentIndex(1 if p.sortMode == "title" else 2 if p.sortMode == "time" else 0)
-
       self.toolsBar.setVisible(p.toolsVisible)
-
+      
+      self.profile = p
    
    def SaveProfile(self, filename=None):
-      if filename is None: filename = '%s.dat' % self.profile
+      if filename is None: filename = '%s.dat' % self.profileName
       
       codepage = 'utf-8'
-      profileVersion = '0.1b'
+      profileVersion = '0.1c'
       entryVersion   = '0.1a'
       
-      p = ProfileSettings()
+      p = self.profile
       
       p.iconSize = self.centralWidget().iconSize
       p.numEntries = len(self.centralWidget().entries)

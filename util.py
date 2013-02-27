@@ -22,8 +22,10 @@ class ProfileSettings:
       self.windowPos  = None
       self.toolsVisible = None
       self.sortMode = None
+      self.steamId = None
       #self.entries = []
       
+   @staticmethod
    def Default():
       d = ProfileSettings()
       d.iconSize = 128
@@ -32,6 +34,8 @@ class ProfileSettings:
       d.windowPos = (0,0)
       d.toolsVisible = 1
       d.sortMode = "manual"
+      d.steamId = '0'
+      return d
 
 class EntrySettings:
    """ Container class for keeping settings specific to a single entry """
@@ -45,6 +49,7 @@ class EntrySettings:
       self.position = None
       self.totalTime = None
       
+   @staticmethod
    def Default():
       d = EntrySettings()
       d.filename = ""
@@ -55,6 +60,7 @@ class EntrySettings:
       d.preferredIcon = -1
       d.position = 0
       d.totalTime = 0.
+      return d
 
 class LogHandler:
    """ Abstract base class for an object with logging capabilities.
@@ -124,7 +130,15 @@ class FileParser(LogHandler):
               ('windowSize', (int,int)),
               ('windowPos', (int,int)),
               ('toolsVisible', int),
-              ('sortMode', str) ] }
+              ('sortMode', str) ] ,
+              
+    '0.1c': [ ('iconSize', int),
+              ('numEntries', int),
+              ('windowSize', (int,int)),
+              ('windowPos', (int,int)),
+              ('toolsVisible', int),
+              ('sortMode', str),
+              ('steamId', str) ] }
    
    # dictionary with entry format specifiers, accessed by format version
    entryFormats = {
@@ -161,7 +175,9 @@ class FileParser(LogHandler):
          if getattr(handler, var) is None:
             setattr(handler, var, getattr(EntrySettings.Default(), var))
             count += 1
-      self._Log("Completed entry by setting %i variables to their default values." % count)
+            
+      self._Log("Completed entry by setting %i variables to their default values.\n" % count)
+      return count
          
    def CompleteProfile(self, handler, version):
       """ Fills all profile parameters which still are None with their default values. This should be called after loading a
@@ -175,10 +191,12 @@ class FileParser(LogHandler):
       
       #self._Log("Completing profile with default values according to version %s." % version)
       for var, type in fmt:
-         if getattr(handler, var) is None:
+         if getattr(handler, var) == None:
             setattr(handler, var, getattr(ProfileSettings.Default(), var))
             count += 1
-      self._Log("Completed profile by setting %i variables to their default values." % count)
+      
+      self._Log("Completed profile by setting %i variables to their default values.\n" % count)
+      return count
    
    def ParseByVersion(self, file, handler, version, type):
       """ Calls parse with the correct format specifier determind by version string (e.g. '0.1a') and type, which must be either

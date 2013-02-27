@@ -20,9 +20,9 @@ class IconSizeComboBox(QtGui.QComboBox):
       self.addItem("16x16 px")
       for size in IconSizeComboBox.supportedIconSizes:
          self.addItem(IconSizeComboBox.textTemplate % (size, size))
-         
+      
       self.currentIndexChanged.connect(self.CurrentIndexChangedSlot)
-         
+      
    def CurrentIndexChangedSlot(self, index):
       i = self.currentIndex()
       if i == 0: self.IconSizeChanged.emit(16)

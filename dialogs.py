@@ -49,8 +49,8 @@ class SteamProfileDialog(QtGui.QDialog):
          self.cancelBtn = QtGui.QPushButton("&Cancel", self)
          self.cancelBtn.clicked.connect(self.parent().reject)
       
-         dlgNavLay.addStretch(1)
          dlgNavLay.addWidget(self.cancelBtn)
+         dlgNavLay.addStretch(1)
          dlgNavLay.addWidget(self.nextBtn)
          
          layout = QtGui.QGridLayout()
@@ -70,12 +70,30 @@ class SteamProfileDialog(QtGui.QDialog):
          self.steamIdLbl = QtGui.QLabel()
          self.lastOnlineLbl = QtGui.QLabel()
          
+         self.nextBtn = QtGui.QPushButton("&Yes", self)
+         self.nextBtn.setDefault(True)
+         self.nextBtn.setFocus()
+         self.nextBtn.clicked.connect(self.parent().accept)
+         
+         self.backBtn = QtGui.QPushButton("<< &Back", self)
+         self.backBtn.clicked.connect(self.parent().BackToUsernameWdg)
+         
+         self.cancelBtn = QtGui.QPushButton("&Cancel", self)
+         self.cancelBtn.clicked.connect(self.parent().reject)
+      
+         dlgNavLay = QtGui.QHBoxLayout()
+         dlgNavLay.addWidget(self.cancelBtn)
+         dlgNavLay.addStretch(1)
+         dlgNavLay.addWidget(self.backBtn)
+         dlgNavLay.addWidget(self.nextBtn)
+         
          layout = QtGui.QGridLayout()
-         layout.addWidget(QtGui.QLabel("Is this the correct profile?"), 0, 0, 1, 2)
+         layout.addWidget(QtGui.QLabel("Connect to profile?"), 0, 0, 1, 2)
          layout.addWidget(self.avatarLbl, 1, 0, 3, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
          layout.addWidget(self.nameLbl, 1, 1)
          layout.addWidget(self.steamIdLbl, 2, 1)
          layout.addWidget(self.lastOnlineLbl, 3, 1)
+         layout.addLayout(dlgNavLay, 4, 0, 1, 2)
          
          layout.setRowStretch(1, 1)
          
@@ -102,6 +120,7 @@ class SteamProfileDialog(QtGui.QDialog):
       self.tries = 0
             
       self.setWindowTitle("Add Steam profile")
+      #self.resize(370,180)
       
       self.confirmProfileWdg = SteamProfileDialog.confirmProfileWidget(self)
       self.enterUsernameWdg = SteamProfileDialog.enterUsernameWidget(self)
@@ -153,6 +172,10 @@ class SteamProfileDialog(QtGui.QDialog):
          self.FailedPlayerSummaryQuery.emit()
       else:
          self.SuccessfulPlayerSummaryQuery.emit(playerSummary)
+         
+   def BackToUsernameWdg(self):
+      self.CancelSteamQueries()
+      self.layout().setCurrentWidget(self.enterUsernameWdg)
       
    def CancelSteamQueries(self):
       self.progressBar.hide()
