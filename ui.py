@@ -971,7 +971,7 @@ class MainWindow(QtGui.QMainWindow):
       self.toolsBar = ToolsToolbar(self)
       self.addToolBar(self.toolsBar)
       self.centralWidget().ConnectToToolsBar(self.toolsBar)
-      
+
       # init menus and connections
       self.InitMenus()
       self.InitConnections()
@@ -994,11 +994,25 @@ class MainWindow(QtGui.QMainWindow):
       pass
    
    def ConnectToSteamProfile(self):
-      dlg = SteamProfileDialog(self)
+      # if another connect to steam dialog was canceled and then this routine is called rapidly afterwards,
+      # the old query thread might still be active, delaying deletion of the old dialog object and leading
+      # to an error when QT cleanup routines want the worker thread to disconnect timers set by the main thread.
+      # Thus, wait until the old query has finished.
+      # This should happen very rarely though.
+      if hasattr(self, 'steamConnectDlg'):
+         if self.steamConnectDlg.queryThread.isAlive():
+            self.steamConnectDlg.queryThread.join()
+         
+      dlg = self.steamConnectDlg = SteamProfileDialog(self)
       result = dlg.exec_()
       if result == QtGui.QDialog.Accepted:
+         if self.profile.steamId != '0':
+            confirm = QtGui.QMessageBox.question(self, "Please confirm", "This profile is already connected to a Steam account with id"\
+                                                 +" <b>%s</b>.\n" % self.profile.steamId\
+                                                 + "Do you want to replace the connection with the new account <b>%s</b>?" %dlg.steamId,\
+                                                 QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+            if confirm == QtGui.QMessageBox.No: return
          self.profile.steamId = dlg.steamId
-         print self.profile.steamId
          self.SaveProfile()
    
    def InitConnections(self):

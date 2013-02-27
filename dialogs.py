@@ -141,6 +141,28 @@ class SteamProfileDialog(QtGui.QDialog):
    def __del__(self):
       self.steamapi.__del__()
       
+   def reject(self):
+      # disconnect all connections to not respond to any threads still working when they finish
+      self.FailedSteamIdQuery.disconnect()
+      self.FailedPlayerSummaryQuery.disconnect()
+      self.FailedAvatarDl.disconnect()
+      self.InvalidUserQuery.disconnect()
+      self.SuccessfulSteamIdQuery.disconnect()
+      self.SuccessfulPlayerSummaryQuery.disconnect()
+      self.SuccessfulAvatarDl.disconnect()
+      
+      QtGui.QDialog.reject(self)
+      
+      # shut down query thread, if it is still working
+      # --- not needed anymore, as this dialog is a member of the MainWindow object,
+      # --- it will be kept until closing the program, so the already disconnected
+      # --- threads have enough time to finish whatever they are currently doing.
+      
+      #if hasattr(self, 'queryThread') and self.queryThread.isAlive():
+      #   self.queryThread.join(0.1)
+      #   if self.queryThread.isAlive():
+      #      raise Exception('SteamProfileDialog could not shut down query thread!')
+      
    def Thread_DownloadAvatar(self, url, steamid):
       try:
          with open(os.path.join('cache', '%i.jpg' % steamid), 'wb') as localFile:
@@ -194,8 +216,8 @@ class SteamProfileDialog(QtGui.QDialog):
       self.pbLbl.setText("Please wait a moment.\nRequesting Steam ID ... (%i)" % self.tries)
       self.tries += 1
       
-      queryThread = threading.Thread(target=self.Thread_GetSteamIdByUsername, args=(self.username,))
-      queryThread.start()
+      self.queryThread = threading.Thread(target=self.Thread_GetSteamIdByUsername, args=(self.username,))
+      self.queryThread.start()
       
    def SteamIdReceived(self, steamid):
       self.progressBar.setValue(10)
@@ -204,8 +226,8 @@ class SteamProfileDialog(QtGui.QDialog):
       self.steamId = int(steamid)
       
       # start player summary query
-      queryThread = threading.Thread(target=self.Thread_GetPlayerSummary, args=(int(steamid),))
-      queryThread.start()
+      self.queryThread = threading.Thread(target=self.Thread_GetPlayerSummary, args=(int(steamid),))
+      self.queryThread.start()
       
    def NoPlayerSummaryFound(self):
       result = QtGui.QMessageBox.critical(self, "Error", "Could not find player information for steam ID %i." % self.steamId, QtGui.QMessageBox.Retry | QtGui.QMessageBox.Cancel)
@@ -228,8 +250,8 @@ class SteamProfileDialog(QtGui.QDialog):
       
       self.playerSummary = playerSummary
       
-      queryThread = threading.Thread(target=self.Thread_DownloadAvatar, args=(playerSummary.avatarmedium, self.steamId))
-      queryThread.start()
+      self.queryThread = threading.Thread(target=self.Thread_DownloadAvatar, args=(playerSummary.avatarmedium, self.steamId))
+      self.queryThread.start()
       
    def AvatarReceived(self):
       self.progressBar.setValue(25)
@@ -249,8 +271,8 @@ class SteamProfileDialog(QtGui.QDialog):
       
       if result == QtGui.QMessageBox.Retry:
          # try again
-         queryThread = threading.Thread(target=self.Thread_DownloadAvatar, args=(self.playerSummary.avatarmedium, self.steamId))
-         queryThread.start()
+         self.queryThread = threading.Thread(target=self.Thread_DownloadAvatar, args=(self.playerSummary.avatarmedium, self.steamId))
+         self.queryThread.start()
       
       elif result == QtGui.QMessageBox.Ignore:
          # proceed to next dialog page
@@ -274,7 +296,7 @@ class SteamProfileDialog(QtGui.QDialog):
       
       self.tries = 0
       
-      self.enterUsernameWdg.cancelBtn.setEnabled(False)
+      #self.enterUsernameWdg.cancelBtn.setEnabled(False)
       self.enterUsernameWdg.nextBtn.setEnabled(False)
       self.enterUsernameWdg.usernameLe.setEnabled(False)
       
@@ -287,8 +309,8 @@ class SteamProfileDialog(QtGui.QDialog):
       
       # start query thread and return, waiting for the Thread's finished signal
       self.tries += 1
-      queryThread = threading.Thread(target=self.Thread_GetSteamIdByUsername, args=(self.username,))
-      queryThread.start()
+      self.queryThread = threading.Thread(target=self.Thread_GetSteamIdByUsername, args=(self.username,))
+      self.queryThread.start()
       
       return
       
