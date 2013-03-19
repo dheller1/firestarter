@@ -6,7 +6,7 @@
 #
 
 import codecs
-import time
+import time, datetime
 import threading
 from types import *
 
@@ -48,6 +48,7 @@ class EntrySettings:
       self.preferredIcon = None
       self.position = None
       self.totalTime = None
+      self.lastPlayed = None
       
    @staticmethod
    def Default():
@@ -60,6 +61,7 @@ class EntrySettings:
       d.preferredIcon = -1
       d.position = 0
       d.totalTime = 0.
+      d.lastPlayed = 0.
       return d
 
 class LogHandler:
@@ -149,7 +151,17 @@ class FileParser(LogHandler):
               ('iconPath', unicode),
               ('preferredIcon', int),
               ('position', int),
-              ('totalTime', float) ] }
+              ('totalTime', float) ] ,
+   
+    '0.1b': [ ('filename', unicode),
+              ('workingDir', unicode),
+              ('label', unicode),
+              ('cmdLineArgs', unicode),
+              ('iconPath', unicode),
+              ('preferredIcon', int),
+              ('position', int),
+              ('totalTime', float),
+              ('lastPlayed', float) ]}
    
    def __init__(self, logEnabled = True):
       LogHandler.__init__(self, logEnabled, 'parser.log')
@@ -354,6 +366,18 @@ def flushLogfiles(list, codepage):
          f.write("# -*- coding: %s -*-\n" % codepage)
          f.write(time.strftime(STAMPFORMAT) + "... *** Starting program, old logfile erased *** ...\n")
          f.write("\n")
+
+def formatLastPlayed(time):
+   """ Format a specified date/time (in seconds since the epoch) into a nice printing format. """
+   if time == 0.: return "Never"
+   else:
+      lpDate = datetime.date.fromtimestamp(time)
+      deltaDays = (datetime.date.today() - lpDate).days
+      
+      if deltaDays == 0: return "Today"
+      elif deltaDays == 1: return "Yesterday"
+      elif 1 < deltaDays and deltaDays < 6: return lpDate.strftime('%A')
+      else: return lpDate.strftime('%d.%m.%y')
          
 def formatTime(time):
    """ Format a specified time (in seconds) into a nice printing format. """

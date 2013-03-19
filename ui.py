@@ -31,7 +31,7 @@ usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox, ToolsToolbar
 from dialogs import *
-from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime
+from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed
 
 class AppStarterEntry(QtCore.QObject):
    UpdateText = pyqtSignal()
@@ -46,6 +46,7 @@ class AppStarterEntry(QtCore.QObject):
       self.preferredIcon = 0
       self.cmdLineArgs = ""
       self.totalTime = 0.
+      self.lastPlayed = 0. # seconds since the epoch
       self.running = False
       self.label = u"Unknown application"
       self.position = 0
@@ -136,6 +137,7 @@ class AppStarterEntry(QtCore.QObject):
       runtime = time.clock() - startTime
       
       self.totalTime += runtime
+      self.lastPlayed = time.time()
       self.running = False
       
       self.UpdateProfile.emit()
@@ -270,7 +272,11 @@ class EntryItem(QtGui.QListWidgetItem):
       if entry.running: timeText = "Currently running..."
       else:
          if entry.totalTime == 0.: timeText ="Never played"
-         else: timeText = formatTime(entry.totalTime) + " played"
+         else: 
+            timeText = formatTime(entry.totalTime) + " played"
+            
+            # not enough space for this! only showed in list/details mode (16x16px) currently
+            #timeText += ", last played: " + formatLastPlayed(entry.lastPlayed)
       
       if self.showPlaytime:
          text = entry.label + "\n" + timeText
@@ -609,12 +615,10 @@ class DetailsWidget(QtGui.QWidget):
       if entry.running: timeText = "Currently running..."
       else:
          if entry.totalTime == 0.: timeText ="Never played"
-         elif entry.totalTime < 60.: timeText = "<1m played"
-         elif entry.totalTime < 20.*60: timeText = "%im %is played" % (entry.totalTime//60, entry.totalTime%60)
-         elif entry.totalTime < 60.*60: timeText = "%im played" % (entry.totalTime//60)
-         elif entry.totalTime < 20.*60*60: timeText = "%ih %im played" %  (entry.totalTime//3600, (entry.totalTime%3600)//60)
-         elif entry.totalTime < 200.*60*60: timeText = "%ih played" % (entry.totalTime//3600)
-         else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
+         else: 
+            timeText = formatTime(entry.totalTime) + " played"
+            timeText += "\nLast played: " + formatLastPlayed(entry.lastPlayed)
+      
       self.playtimeLabel.setText(timeText)
       
 class CategoryListAndDetailsWidget(QtGui.QWidget):
@@ -1048,7 +1052,7 @@ class MainWindow(QtGui.QMainWindow):
       """ Load profile specified by filename, or by self.profileName if no filename is given.
         Returns True if loading was erroneous, otherwise returns False. """
       bestProfileVersion = '0.1c'
-      bestEntryVersion   = '0.1a'
+      bestEntryVersion   = '0.1b'
       
       backupProfile = False
       defaultBackup = True # always make a default backup as safety for loading errors
@@ -1177,7 +1181,7 @@ class MainWindow(QtGui.QMainWindow):
       
       codepage = 'utf-8'
       profileVersion = '0.1c'
-      entryVersion   = '0.1a'
+      entryVersion   = '0.1b'
       
       p = self.profile
       
