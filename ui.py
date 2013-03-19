@@ -978,12 +978,19 @@ class MainWindow(QtGui.QMainWindow):
       
       # init profile      
       self.fileParser = FileParser()
+      self.erroneousProfile = False
       self.profile = ProfileSettings()
       self.profileName = os.environ.get("USERNAME")
-      self.LoadProfile()
+      
+      try:
+         self.LoadProfile()
+      except (ValueError, IOError, EOFError) as e:
+         self.erroneousProfile = True # this will disable saving the profile completely.
+         QtGui.QMessageBox.critical(self, "Error", ("An error occured when loading the profile '%s.dat'.\n" % self.profileName) + \
+                                    "Please fix your profile and restart the program.\nChanges made during this session will not be saved." + \
+                                    "\n\nError message: '%s'" % str(e))      
       
    def __del__(self):
-      #print "Saving profile prior to closing program..."
       self.SaveProfile()
       self.fileParser.__del__()
       
@@ -1030,27 +1037,40 @@ class MainWindow(QtGui.QMainWindow):
       self.settingsMenu = SettingsMenu(self, self.centralWidget().iconSize)
       self.viewMenu = ViewMenu(self, showTools=self.toolsBar.toggleViewAction())
       self.fileMenu = FileMenu(self)
+      self.profileMenu = ProfileMenu(self)
       
       self.menuBar().addMenu(self.fileMenu)
+      self.menuBar().addMenu(self.profileMenu)
       self.menuBar().addMenu(self.viewMenu)
       self.menuBar().addMenu(self.settingsMenu)
       
    def LoadProfile(self, filename=None):
+      """ Load profile specified by filename, or by self.profileName if no filename is given.
+        Returns True if loading was erroneous, otherwise returns False. """
       bestProfileVersion = '0.1c'
       bestEntryVersion   = '0.1a'
       
       backupProfile = False
+      defaultBackup = True # always make a default backup as safety for loading errors
+      
+      updateInfoBoxAlreadyShowed = False
       
       if filename is None: filename = '%s.dat' % self.profileName
-      if not os.path.exists(filename): return
+      if not os.path.exists(filename):
+         QtGui.QMessageBox.critical(self, "Error", "Profile '%s' not found!" % filename)
+         raise IOError('Profile not found')
+         return True
       
-      shutil.copyfile(filename, "~"+filename+".bak")
-      error = False
+      if defaultBackup:
+         shutil.copyfile(filename, "~"+filename+".bak")
       
       # determine encoding
       with open(filename, 'r') as f:
          codepage = f.readline().strip()
          codepage = codepage.replace('# -*- coding:','').replace('-*-','').strip()
+         if len(codepage) == 0:
+            raise ValueError('Empty profile')
+            return True
       
       # try to open file with this encoding
       try:
@@ -1058,8 +1078,8 @@ class MainWindow(QtGui.QMainWindow):
          f.close()
       except LookupError: # unknown coding
          QtGui.QMessageBox.critical(self, "Error", "Unknown codepage '%s' used in profile '%s'.\nPlease fix this manually. Loading empty profile." % (codepage, filename))
-         error = True
-         return error
+         raise ValueError('Unknown codepage')
+         return True
       
       p = ProfileSettings()
       fp = self.fileParser
@@ -1071,24 +1091,28 @@ class MainWindow(QtGui.QMainWindow):
          profileVersion = f.readline().strip() # read file format version
          if profileVersion not in FileParser.profileFormats:
             QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for profile '%s'!\nAborting load process." % (profileVersion, filename))
-            return
+            raise ValueError('Unsupported file format')
+            return True
          try: fp.ParseByVersion(file=f, handler=p, version=profileVersion, type='profile')
          except ValueError as e:
             QtGui.QMessageBox.critical(self, "Profile loading error", str(e))
-            return
+            raise ValueError(str(e))
+            return True
          
          if bestProfileVersion != profileVersion:
             count = fp.CompleteProfile(p, bestProfileVersion)
             backupProfile = True
-            if count > 0:
+            if count > 0 and not updateInfoBoxAlreadyShowed:
                QtGui.QMessageBox.information(self, "Information", "Your profile has been updated to a newer version.\n"\
                         + "Should any problems occur, a backup is available: %s" % (filename+"."+profileVersion))
+               updateInfoBoxAlreadyShowed = True
          
          for i in range(p.numEntries):
             entryVersion = f.readline().strip() # read file format version
             if entryVersion not in FileParser.entryFormats:
                QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for entry in profile '%s'!\nAborting load process." % (entryVersion, filename))
-               return
+               raise ValueError('Unsupported file format')
+               return True
             
             entry = AppStarterEntry(parentWidget=self.centralWidget())
             eHndlr = EntrySettings()
@@ -1097,17 +1121,20 @@ class MainWindow(QtGui.QMainWindow):
                fp.ParseByVersion(file=f, handler=eHndlr, version=entryVersion, type='entry')
             except ValueError as e:
                QtGui.QMessageBox.critical(self, "Profile loading error (entry)", str(e))
-               return
+               raise ValueError(str(e))
+               return True
             except EOFError:
                QtGui.QMessageBox.critical(self, "End of file error", "Unable to load entry %i from profile '%s'!\nEntries might be incomplete." % (i+1, filename))
-               continue
+               raise EOFError('Incomplete entry')
+               return True
             
             if bestEntryVersion != entryVersion:
                count = fp.CompleteEntry(eHndlr, bestEntryVersion)
                backupProfile = True
-               if count > 0:
+               if count > 0 and not updateInfoBoxAlreadyShowed:
                   QtGui.QMessageBox.information(self, "Information", "Your profile has been updated to a newer version.\n"\
                         + "Should any problems occur, a backup is available: %s" % (filename+"."+profileVersion))
+                  updateInfoBoxAlreadyShowed = True
                   
             # copy data from EntrySettings object to actual entry
             for var, type in FileParser.entryFormats[bestEntryVersion]:
@@ -1139,8 +1166,13 @@ class MainWindow(QtGui.QMainWindow):
       self.toolsBar.setVisible(p.toolsVisible)
       
       self.profile = p
+      
+      return False
    
    def SaveProfile(self, filename=None):
+      # do not save if profile was not loaded correctly
+      if self.erroneousProfile: return
+   
       if filename is None: filename = '%s.dat' % self.profileName
       
       codepage = 'utf-8'
@@ -1225,6 +1257,13 @@ class SettingsMenu(QtGui.QMenu):
    
    def InitConnections(self):
       self.iconSizeActions.triggered.connect(self.parent().UpdateIconSizeFromMenu)
+      
+class ProfileMenu(QtGui.QMenu):
+   def __init__(self, parent=None):
+      QtGui.QMenu.__init__(self, "&Profile", parent)
+      
+      self.settingsAction = QtGui.QAction("&Settings", self)
+      self.addAction(self.settingsAction)
       
 class FileMenu(QtGui.QMenu):
    def __init__(self, parent=None):

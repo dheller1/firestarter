@@ -480,7 +480,17 @@ class ChooseIconDialog(QtGui.QDialog):
             files.append(os.path.join(dir,f))
             
       return files
-   
+
+
+class ProfileSettingsDialog(QtGui.QDialog):
+   def __init__(self, profile, parent=None):
+      QtGui.QDialog.__init__(self, parent)
+      
+      self.setWindowTitle("Profile settings")
+      #self.resize(300,500)
+      
+      self.profile = settings
+
 
 class EntryPropertiesDialog(QtGui.QDialog):
    def __init__(self, entry, parent=None):
