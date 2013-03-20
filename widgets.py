@@ -76,9 +76,11 @@ class ToolsToolbar(QtGui.QToolBar):
       self.sortComboBox = SortModeComboBox()
       self.upBtn = QtGui.QPushButton()
       self.upBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "Actions-arrow-up-icon.png")))
+      self.upBtn.setEnabled(False)
       
       self.downBtn = QtGui.QPushButton()
       self.downBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "Actions-arrow-down-icon.png")))
+      self.downBtn.setEnabled(False)
       
       # init layout
       dwWdg = QtGui.QWidget(self)
