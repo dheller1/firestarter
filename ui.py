@@ -423,7 +423,6 @@ class CategoryWidget(QtGui.QListWidget):
    EnableReorderButtons = pyqtSignal()
    ProfileChanged = pyqtSignal()
    
-   
    def __init__(self, parent=None, iconSize = 48):
       QtGui.QListWidget.__init__(self, parent)
       
@@ -431,7 +430,7 @@ class CategoryWidget(QtGui.QListWidget):
       self.contextMenu = EntryMenu(self)
       
       # connections
-      self.itemDoubleClicked.connect(self.RunItem)
+      self.itemActivated.connect(self.RunItem)
       self.itemSelectionChanged.connect(self.ItemSelectionChanged)
       self.currentRowChanged.connect(self.ItemSelectionChanged) # connect this too, as reordering might change row but keep item selection
 
