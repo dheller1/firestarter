@@ -6,8 +6,6 @@
 
 - Sicherheitsabfrage wenn das Programm geschlossen werden soll obwohl noch Prozesse laufen
 
-- Steam: Falls keine Verbindung, Abbruch nach ein paar Sekunden.
-
 - zusätzliche Infos aus gedraggter Verknüpfung holen?
 
 - Auswahl konsistent halten zwischen Icon/Listview

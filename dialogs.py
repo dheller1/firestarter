@@ -3,7 +3,7 @@
 import os
 import ctypes
 import time
-import urllib
+import urllib2
 import threading
 
 from PyQt4 import QtGui, QtCore
@@ -166,10 +166,10 @@ class SteamProfileDialog(QtGui.QDialog):
    def Thread_DownloadAvatar(self, url, steamid):
       try:
          with open(os.path.join('cache', '%i.jpg' % steamid), 'wb') as localFile:
-            avatarFile = urllib.urlopen(url)
+            avatarFile = urllib2.urlopen(url, timeout=10)
             localFile.write(avatarFile.read())
             avatarFile.close()
-      except IOError:
+      except (IOError, urllib2.URLError):
          self.FailedAvatarDl.emit()
          return
 
@@ -233,7 +233,7 @@ class SteamProfileDialog(QtGui.QDialog):
       result = QtGui.QMessageBox.critical(self, "Error", "Could not find player information for steam ID %i." % self.steamId, QtGui.QMessageBox.Retry | QtGui.QMessageBox.Cancel)
       if result == QtGui.QMessageBox.Retry:
          self.tries = 0
-         self.RetrySteamIdQuery
+         self.RetrySteamIdQuery()
          
       elif result == QtGui.QMessageBox.Cancel:
          self.CancelSteamQueries()

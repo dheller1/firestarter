@@ -7,7 +7,7 @@ Created on 03.01.2013
 
 import time
 import json
-import urllib
+import urllib2
 import xml.dom.minidom
 import xml.parsers.expat
 from util import LogHandler
@@ -54,7 +54,11 @@ class SteamApi(LogHandler):
       
       self._Log("Player summaries query: %s" % request)
       # fetch result
-      f = urllib.urlopen(request)
+      try:
+         f = urllib2.urlopen(request, timeout=10)
+      except urllib2.URLError: # timeout
+         self._Log("Timeout, no connection to Steam.")
+         return []
       summaries = json.load(f, encoding='utf-8')["response"]["players"]
       f.close()
       
@@ -81,7 +85,11 @@ class SteamApi(LogHandler):
 
       startTime = time.clock()
          
-      f = urllib.urlopen(request)
+      try:
+         f = urllib2.urlopen(request, timeout=10)
+      except urllib2.URLError: # timeout
+         self._Log("Timeout, no connection to Steam.")
+         return None
       profile = f.read()
       f.close()
       
