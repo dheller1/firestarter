@@ -31,7 +31,7 @@ usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox, ToolsToolbar
 from dialogs import *
-from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed
+from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage
 
 class AppStarterEntry(QtCore.QObject):
    UpdateText = pyqtSignal()
@@ -50,6 +50,8 @@ class AppStarterEntry(QtCore.QObject):
       self.running = False
       self.label = u"Unknown application"
       self.position = 0
+      
+      self.currentSessionTime = 0.
       
       if path is not None:
          head, tail = os.path.split(path)
@@ -132,10 +134,15 @@ class AppStarterEntry(QtCore.QObject):
    def SuperviseProcess(self, process):
       startTime = time.clock()
       
-      process.wait()
+      # process supervising loop
+      while(process.poll() is None):
+         runtime = time.clock() - startTime
+         self.currentSessionTime = runtime # atomic, threadsafe
+         self.UpdateText.emit() # threadsafe
+         
+         time.sleep(2.)
       
       runtime = time.clock() - startTime
-      
       self.totalTime += runtime
       self.lastPlayed = time.time()
       self.running = False
@@ -269,7 +276,7 @@ class EntryItem(QtGui.QListWidgetItem):
       
    def UpdateText(self):
       entry = self.entry
-      if entry.running: timeText = "Currently running..."
+      if entry.running: timeText = "Currently running... %s" % formatTime(entry.currentSessionTime)
       else:
          if entry.totalTime == 0.: timeText ="Never played"
          else: 
@@ -983,25 +990,46 @@ class MainWindow(QtGui.QMainWindow):
       self.fileParser = FileParser()
       self.erroneousProfile = False
       self.profile = ProfileSettings()
-      self.profileName = os.environ.get("USERNAME")
       
-      try:
-         self.LoadProfile()
-      except (ValueError, IOError, EOFError) as e:
-         self.erroneousProfile = True # this will disable saving the profile completely.
-         QtGui.QMessageBox.critical(self, "Error", ("An error occured when loading the profile '%s.dat'.\n" % self.profileName) + \
-                                    "Please fix your profile and restart the program.\nChanges made during this session will not be saved." + \
-                                    "\n\nError message: '%s'" % str(e))      
-      
-   def __del__(self):
+      lastProfile = self.GetLastProfileName() # try to determine last profile first
+      if lastProfile is not None and not os.path.isfile(lastProfile):
+         QtGui.QMessageBox.warning(self, "Warning", "Could not find your last profile '%s'.\nPlease select a profile manually." % lastProfile)
+         lastProfile = None
+         
+      if lastProfile is None: # if failed, let the user select a profile or create a new one
+         selectedProfile = self.InvokeProfileSelection()
+            
+      if lastProfile is not None: self.profileName = lastProfile
+      elif selectedProfile is not None: self.profileName = selectedProfile
+      else:
+         self.profileName = None
+         self.erroneousProfile = True
+         QtGui.QMessageBox.information(self, "Information", "No profile was selected.\nChanges made during this session will not be saved.")
+         
+      if self.profileName is not None:
+         try:
+            self.LoadProfile(self.profileName)
+         except (ValueError, EOFError, IOError) as e:
+            self.erroneousProfile = True # this will disable saving the profile completely.
+            QtGui.QMessageBox.critical(self, "Error", ("An error occured when loading the profile '%s'.\n" % self.profileName) + \
+                                       "Please fix your profile and restart the program.\nChanges made during this session will not be saved." + \
+                                       "\n\nError message: '%s'" % str(e))
+   
+   # reimplemented Qt-style in closeEvent  
+   #def __del__(self):
+   #   self.SaveProfile()
+   #   self.fileParser.__del__()
+   
+   def closeEvent(self, e):
       self.SaveProfile()
       self.fileParser.__del__()
+      QtGui.QMainWindow.closeEvent(self, e)
+   
+   #def moveEvent(self, e):
+   #   pass
       
-   def moveEvent(self, e):
-      pass
-      
-   def resizeEvent(self, e):
-      pass
+   #def resizeEvent(self, e):
+   #   pass
    
    def ConnectToSteamProfile(self):
       # if another connect to steam dialog was canceled and then this routine is called rapidly afterwards,
@@ -1025,6 +1053,14 @@ class MainWindow(QtGui.QMainWindow):
          self.profile.steamId = dlg.steamId
          self.SaveProfile()
    
+   def GetLastProfileName(self):
+      if not os.path.isfile('lastprofile'): return None
+      
+      with openFileWithCodepage('lastprofile', 'r') as f:
+         lastprofile = f.readline()
+
+      return lastprofile if len(lastprofile) > 0 else None
+ 
    def InitConnections(self):
       self.toolsBar.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)
       self.toolsBar.upBtn.clicked.connect(self.centralWidget().MoveItemUp)
@@ -1047,6 +1083,17 @@ class MainWindow(QtGui.QMainWindow):
       self.menuBar().addMenu(self.viewMenu)
       self.menuBar().addMenu(self.settingsMenu)
       
+   def InvokeProfileSelection(self):
+      pDlg = ProfileSelectionDialog(self)
+      result = pDlg.exec_()
+      if result == QtGui.QDialog.Rejected:
+         return None
+            
+      elif result == QtGui.QDialog.Accepted:
+         if pDlg.newProfile:
+            self.SaveDefaultProfile(pDlg.profileName)
+         return pDlg.profileName
+   
    def LoadProfile(self, filename=None):
       """ Load profile specified by filename, or by self.profileName if no filename is given.
         Returns True if loading was erroneous, otherwise returns False. """
@@ -1058,9 +1105,10 @@ class MainWindow(QtGui.QMainWindow):
       
       updateInfoBoxAlreadyShowed = False
       
-      if filename is None: filename = '%s.dat' % self.profileName
+      if filename is None: filename = self.profileName
       if not os.path.exists(filename):
-         QtGui.QMessageBox.critical(self, "Error", "Profile '%s' not found!" % filename)
+         # suppress this box as this error will just evoke the profile selection dialog
+         #QtGui.QMessageBox.critical(self, "Error", "Profile '%s' not found!" % filename)
          raise IOError('Profile not found')
          return True
       
@@ -1170,13 +1218,32 @@ class MainWindow(QtGui.QMainWindow):
       
       self.profile = p
       
+      # store as last profile
+      codepage = 'utf-8'
+      with codecs.open('lastprofile', 'w', codepage) as f:
+         f.write("# -*- coding: %s -*-\n" % codepage)
+         f.write(filename)
+      
       return False
+   
+   def SaveDefaultProfile(self, filename):
+      codepage = 'utf-8'
+      profileVersion = '0.1c'
+      
+      p = ProfileSettings.Default()
+      fp = self.fileParser
+      
+      with codecs.open(filename, 'w', codepage) as f:
+         f.write("# -*- coding: %s -*-\n" % codepage)
+         f.write(profileVersion+'\n')
+         fp.WriteByVersion(file=f, handler=p, version=profileVersion, type='profile')
+         # no entries
    
    def SaveProfile(self, filename=None):
       # do not save if profile was not loaded correctly
       if self.erroneousProfile: return
    
-      if filename is None: filename = '%s.dat' % self.profileName
+      if filename is None: filename = self.profileName
       
       codepage = 'utf-8'
       profileVersion = '0.1c'

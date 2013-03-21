@@ -1,6 +1,13 @@
-- Error Handling / automatische Backups bei Fehlern beim Profil laden
-- Check ob Programm schon läuft, falls ja kein weiteres Mal starten (zumindest nicht mit demselben Profil)
-- Ordnen nach Alphabet, Spielzeit
-- Gesamtspielzeit
 - Offsets für Spielzeit
 - Balken für Anteil an maximaler Spielzeit
+
+- Automatische Zeitaktualisierung bei laufenden Programmen in regelmäßigen Abständen
+  (sonst Datenverlust bei Absturz)
+
+- Sicherheitsabfrage wenn das Programm geschlossen werden soll obwohl noch Prozesse laufen
+
+- Steam: Falls keine Verbindung, Abbruch nach ein paar Sekunden.
+
+- zusätzliche Infos aus gedraggter Verknüpfung holen?
+
+- Auswahl konsistent halten zwischen Icon/Listview

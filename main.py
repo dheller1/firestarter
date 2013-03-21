@@ -11,7 +11,7 @@ from ui import MainWindow
 from PyQt4 import QtGui
 from util import flushLogfiles
 
-def pidRunning(pid):        
+def pidRunning(pid):
    '''Check For the existence of a pid.'''
    wmi = win32com.client.GetObject('winmgmts:')
    prc = wmi.ExecQuery('Select * from win32_process where ProcessId=%s' % pid)

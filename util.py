@@ -387,6 +387,48 @@ def formatTime(time):
    elif time < 20.*60*60: return "%ih %im" %  (time//3600, (time%3600)//60)
    elif time < 200.*60*60: return "%ih" % (time//3600)
    else: return "%id %ih" % (time//86400, (time%86400)//3600)
+   
+def openFileWithCodepage(filename, mode='r'):
+   """ Opens a file general, reads its codepage, opens it again with the correct codepage,
+     skips the codepage (if reading) / writes the codepage (if writing), and returns the
+     file object """
+      
+   # determine encoding
+   with open(filename, 'r') as f:
+      codepage = f.readline().strip()
+      codepage = codepage.replace('# -*- coding:','').replace('-*-','').strip()
+      if len(codepage) == 0:
+         raise ValueError('Empty file')
+         return None
+
+   # try to open file with this encoding
+   try:
+      f = codecs.open(filename, mode, codepage)
+      f.close()
+   except LookupError: # unknown coding
+      raise ValueError('Unknown codepage: %s' % codepage)
+      return None
+   
+   
+   f = codecs.open(filename, mode, codepage)
+   
+   # skip the codepage line if read-mode:
+   if mode.lstrip('U').startswith('r'):
+      f.readline()
+      return f
+   
+   # write codepage to the first line if write-mode and return file object:
+   elif mode.lstrip('U').startswith('w'):
+      f.write("# -*- coding: %s -*-\n" % codepage)
+      return f
+   
+   # else (append mode): just return file object
+   elif mode.lstrip('U').startswith('a'):
+      return f
+   
+   else:
+      raise ValueError('Unsupported file opening mode: %s' % mode)
+      return None
 
 def din5007(input):
    """ This function implements sort keys for the german language according to 

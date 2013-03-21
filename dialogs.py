@@ -489,8 +489,71 @@ class ProfileSettingsDialog(QtGui.QDialog):
       self.setWindowTitle("Profile settings")
       #self.resize(300,500)
       
-      self.profile = settings
+      self.profile = profile
 
+
+class ProfileSelectionDialog(QtGui.QDialog):
+   def __init__(self, parent=None):
+      QtGui.QDialog.__init__(self, parent)
+      
+      self.newProfile = False
+      self.profileName = ""
+      
+      self.newProfileText = "  >>  New profile ..."
+      
+      self.setWindowTitle("Select profile:")
+      self.resize(120,150)
+      
+      # init children
+      self.profileList = QtGui.QListWidget(self)
+      self.profileList.addItem(self.newProfileText)
+      
+      dirList =  os.listdir('.')
+      for f in dirList:
+         if f.endswith(".dat"):
+            self.profileList.addItem(f)
+      
+      self.okBtn = QtGui.QPushButton("&Ok", self)
+      self.okBtn.setDefault(True)
+      self.okBtn.setEnabled(False)
+      
+      self.cancelBtn = QtGui.QPushButton("&Cancel", self)
+      
+      # init layout
+      buttonsLayout= QtGui.QHBoxLayout()
+      buttonsLayout.addWidget(self.okBtn)
+      buttonsLayout.addWidget(self.cancelBtn)
+      
+      self.layout = lay = QtGui.QVBoxLayout()
+      
+      lay.addWidget(self.profileList)
+      lay.addLayout(buttonsLayout)
+      
+      self.setLayout(lay)
+      
+      # init connections
+      self.okBtn.clicked.connect(self.Accepted)
+      self.cancelBtn.clicked.connect(self.reject)
+      self.profileList.itemSelectionChanged.connect(self.SelectionChanged)
+      self.profileList.itemActivated.connect(self.Accepted)
+      
+   def Accepted(self):
+      selectedText = str(self.profileList.selectedItems()[0].text())
+      
+      if selectedText == self.newProfileText: # new profile
+         name,accepted = QtGui.QInputDialog.getText(self, "New profile", "Please enter a name for your new profile:", text="%s.dat" % os.environ.get("USERNAME"))
+         if accepted:
+            self.newProfile = True
+            self.profileName = str(name)
+            self.accept()
+      else: # existing profile
+         self.newProfile = False
+         self.profileName = selectedText
+         self.accept()
+      
+   def SelectionChanged(self):
+      self.okBtn.setEnabled(len(self.profileList.selectedItems()) == 1)
+      
 
 class EntryPropertiesDialog(QtGui.QDialog):
    def __init__(self, entry, parent=None):
