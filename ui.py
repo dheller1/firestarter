@@ -87,7 +87,7 @@ class AppStarterEntry(QtCore.QObject):
          
    def LoadIcon(self, iconSize=256):
       if self.preferredIcon < 0:
-         self.icon=QtGui.QIcon("noicon.png")
+         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
          return
       
       # determine number of icons
@@ -96,7 +96,7 @@ class AppStarterEntry(QtCore.QObject):
       
       if (numIcons == 0):
          raise IOError("No icons found in file %s!"%self.iconPath)
-         self.icon=QtGui.QIcon("noicon.png")
+         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
          return
       
       hIcon = ctypes.c_int()
@@ -107,7 +107,7 @@ class AppStarterEntry(QtCore.QObject):
                                        iconSize, byref(hIcon), byref(iconId), 1, 0)
       if (res == 0):
          raise IOError("Could not extract %dx%dpx icon from file %s." % (iconSize, iconSize, self.iconPath))
-         self.icon=QtGui.QIcon("noicon.png")
+         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
          return
       
       hIcon = hIcon.value # unpack c_int
@@ -347,7 +347,7 @@ class EntryMenu(QtGui.QMenu):
 #      
 #      self.clearSelection()
 #      
-#      style  = "QTableView { background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; }"\
+#      style  = "QTableView { background-image: url(gfx/wood-texture.jpg); color: white; background-attachment: fixed; }"\
 #             + "QTableView::item { border: 1px solid rgba(0,0,0,0%); }"\
 #             + "QTableView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
 #             + "QTableView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
@@ -536,7 +536,7 @@ class CategoryListWidget(CategoryWidget):
       self.setIconSize(size)
       self.setMovement(QtGui.QListView.Static)
       
-      style  = "QListView { background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; }"\
+      style  = "QListView { background-image: url(gfx/wood-texture.jpg); color: white; background-attachment: fixed; }"\
              + "QListView::item { border: 1px solid rgba(0,0,0,0%); }"\
              + "QListView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
              + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
@@ -565,7 +565,7 @@ class CategoryIconWidget(CategoryWidget):
       
       self.clearSelection()
       
-      style  = "QListView { background-image: url(wood-texture.jpg); background-attachment: fixed; }"\
+      style  = "QListView { background-image: url(gfx/wood-texture.jpg); background-attachment: fixed; }"\
              + "QListView::item { color: white; border: 1px solid rgba(0,0,0,0%); }"\
              + "QListView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
              + "QListView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
@@ -588,7 +588,7 @@ class DetailsWidget(QtGui.QWidget):
       timeFont = QtGui.QFont("Calibri", 12, italic=True)
       self.playtimeLabel = QtGui.QLabel("Never played")
       self.playtimeLabel.setFont(timeFont)
-      picture = QtGui.QPixmap("noicon.png")
+      picture = QtGui.QPixmap(os.path.join("gfx","noicon.png"))
       self.pictureLabel = QtGui.QLabel()
       self.pictureLabel.setPixmap(picture)
    
@@ -658,7 +658,7 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       self.catWdg.EnableReorderButtons.connect(self.EnableReorderButtonsSlot)
       
       # set stylesheet
-      style  = " background-image: url(wood-texture.jpg); color: white; background-attachment: fixed; "\
+      style  = " background-image: url(gfx/wood-texture.jpg); color: white; background-attachment: fixed; "\
              + "QLabel { color: white; }"\
              + "QListView { color: white; }"\
       #       + "QListView::item { border: 1px solid rgba(0,0,0,0%); }"\
@@ -973,7 +973,7 @@ class MainWindow(QtGui.QMainWindow):
       # UI initialization
       self.resize(800,600)
       self.setWindowTitle("FireStarter")
-      self.setWindowIcon(QtGui.QIcon("fire.ico"))
+      self.setWindowIcon(QtGui.QIcon(os.path.join("gfx","fire.ico")))
       
       self.setCentralWidget(MainWidget(self))
       
