@@ -508,7 +508,7 @@ class CategoryWidget(QtGui.QListWidget):
       item = self.currentItem()
       if not item: return
       
-      self.parent().RemoveItem(item.entry, self.row(item))
+      self.parent().RemoveItem(item)
       
    def RenameItem(self):
       item = self.currentItem()
@@ -847,7 +847,7 @@ class MainWidget(QtGui.QWidget):
       for e in entries:
          self.AddEntry(e)
       
-   def RemoveItem(self, entry, row):
+   def RemoveItem(self, item):
       msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, "Warning: Deleting entry", "Do you really want to remove this entry? All"+\
                               " information and playtime will be lost and can not be restored!", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
       result = msg.exec_()
@@ -855,36 +855,17 @@ class MainWidget(QtGui.QWidget):
       
       # find entry
       try:
-         index = self.entries.index(entry)
+         index = self.entries.index(item.entry)
       except ValueError:
          raise ValueError("Tried to remove entry from main widget's entry list, but it is not present!")
       
       # delete entry
       self.entries.pop(index)
+      self.lastManuallySortedEntries.pop(self.lastManuallySortedEntries.index(item.entry))
       
+      row = self.layout().currentWidget().row(item)
       for wdg in self.catWidgets.values():
          i = wdg.takeItem(row)
-         del i
-      
-      self.parent().SaveProfile()
-      
-   def RemoveItemT(self, entry, row, col):
-      msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, "Warning: Deleting entry", "Do you really want to remove this entry? All"+\
-                              " information and playtime will be lost and can not be restored!", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
-      result = msg.exec_()
-      if result == QtGui.QMessageBox.Cancel: return
-      
-      # find entry
-      try:
-         index = self.entries.index(entry)
-      except ValueError:
-         raise ValueError("Tried to remove entry from main widget's entry list, but it is not present!")
-      
-      # delete entry
-      self.entries.pop(index)
-      
-      for wdg in self.catWidgets.values():
-         i = wdg.takeItem(row,col)
          del i
       
       self.parent().SaveProfile()

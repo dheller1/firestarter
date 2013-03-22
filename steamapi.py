@@ -21,7 +21,6 @@ class PlayerSummary(object):
       pass
 
 class SteamApi(LogHandler):
-   
    ERR_INVALID_USER = 1
    auth_key = '383C363E19CFA9A8B5C0A576CE8E253D'
    
