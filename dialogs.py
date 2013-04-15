@@ -549,6 +549,7 @@ class ManualTrackingDialog(QtGui.QDialog):
    def __del__(self):
       self.timer.stop()
       
+      
    def AddTime(self):
       self.timer.stop()
       self.AddTimeSignal.emit(self.entry, self.runtime)
