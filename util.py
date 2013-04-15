@@ -379,9 +379,9 @@ def formatLastPlayed(time):
       elif 1 < deltaDays and deltaDays < 6: return lpDate.strftime('%A')
       else: return lpDate.strftime('%d.%m.%y')
          
-def formatTime(time):
+def formatTime(time, escapeLt=False):
    """ Format a specified time (in seconds) into a nice printing format. """
-   if time < 60.: return "< 1m"
+   if time < 60.: return "< 1m" if not escapeLt else "&lt; 1m"
    elif time < 20.*60: return "%im %is" % (time//60, time%60)
    elif time < 60.*60: return "%im" % (time//60)
    elif time < 20.*60*60: return "%ih %im" %  (time//3600, (time%3600)//60)

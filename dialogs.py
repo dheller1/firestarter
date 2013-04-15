@@ -22,6 +22,7 @@ usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox, AutoSelectAllLineEdit
 from steamapi import SteamApi
+from util import formatTime
 
 
 class SteamProfileDialog(QtGui.QDialog):
@@ -491,7 +492,72 @@ class ProfileSettingsDialog(QtGui.QDialog):
       
       self.profile = profile
 
-
+class ManualTrackingDialog(QtGui.QDialog):
+   AddTimeSignal = pyqtSignal(object, int)
+   
+   def __init__(self, entry, parent=None):
+      QtGui.QDialog.__init__(self, parent)
+      
+      self.setWindowTitle(entry.label)
+      
+      self.entry = entry
+      self.timer = QtCore.QTimer()
+      self.timer.timeout.connect(self.UpdateTime)
+      
+      # init layout
+      lay = QtGui.QHBoxLayout()
+      
+      picture = entry.icon.pixmap(128,128)
+      pictureLabel = QtGui.QLabel()
+      pictureLabel.setPixmap(picture)
+      
+      self.setWindowIcon(entry.icon)
+      
+      lay.addWidget(pictureLabel)
+      
+      lay2 = QtGui.QVBoxLayout()
+      lay.addLayout(lay2)
+            
+      descLabel = QtGui.QLabel("It seems that FireStarter was unable to track your game time for <b>%s</b>.<br>This is a common issue when a game" % entry.label
+                               +" uses a launcher or an auto-updater.")
+      self.timeLabel = QtGui.QLabel("A playing time of <b>0s</b> has been tracked.")
+      descLabel2 = QtGui.QLabel("Once you finished playing, click <b>Add time to game</b> to<br>manually add your game time, or <b>Discard</b> to discard it.")
+      
+      lay2.addWidget(descLabel)
+      lay2.addWidget(self.timeLabel)
+      lay2.addWidget(descLabel2)
+      
+      btnLay = QtGui.QHBoxLayout()
+      
+      self.addBtn = QtGui.QPushButton("&Add time to game")
+      self.addBtn.setDefault(True)
+      self.addBtn.clicked.connect(self.AddTime)
+      self.discardBtn = QtGui.QPushButton("&Discard")
+      self.discardBtn.clicked.connect(self.reject)
+      
+      btnLay.addWidget(self.addBtn)
+      btnLay.addWidget(self.discardBtn)
+      
+      lay2.addLayout(btnLay)
+      
+      self.setLayout(lay)
+      
+      # start timer
+      self.runtime = 0.
+      self.timer.start(1000)
+      
+   def __del__(self):
+      self.timer.stop()
+      
+   def AddTime(self):
+      self.timer.stop()
+      self.AddTimeSignal.emit(self.entry, self.runtime)
+      self.accept()
+      
+   def UpdateTime(self):
+      self.runtime += 1.
+      self.timeLabel.setText("A playing time of <b>%s</b> has been tracked." % formatTime(self.runtime, escapeLt=True))
+      
 class ProfileSelectionDialog(QtGui.QDialog):
    def __init__(self, parent=None):
       QtGui.QDialog.__init__(self, parent)

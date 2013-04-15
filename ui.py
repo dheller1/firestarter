@@ -34,6 +34,7 @@ from dialogs import *
 from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage
 
 class AppStarterEntry(QtCore.QObject):
+   ManualTracking = pyqtSignal(object)
    UpdateText = pyqtSignal()
    UpdateIcon = pyqtSignal()
    UpdateProfile = pyqtSignal()
@@ -143,6 +144,11 @@ class AppStarterEntry(QtCore.QObject):
          time.sleep(2.)
       
       runtime = time.clock() - startTime
+      
+      if runtime < 10.:
+         # program was probably started as another subprocess:
+         self.ManualTracking.emit(self)
+         
       self.totalTime += runtime
       self.lastPlayed = time.time()
       self.running = False
@@ -762,12 +768,23 @@ class MainWidget(QtGui.QWidget):
          
       entry.UpdateProfile.connect(self.parent().SaveProfile)
       entry.UpdateProfile.connect(self.UpdatePlaytime)
+      entry.ManualTracking.connect(self.StartManualTracking)
       
       if manuallySorted:
          self.lastManuallySortedEntries = self.entries
          self.isManuallySorted = True
          
       self.UpdatePlaytime()
+      
+   def AddManuallyTrackedTime(self, entry, time):
+      if not entry.running:
+         entry.totalTime += time
+         #print "Added %s to %s." % (formatTime(time), entry.label)
+      else:
+         raise Exception("FATAL: Trying to add manual time to a running entry!")
+      
+      entry.UpdateText.emit()
+      entry.UpdateProfile.emit()
       
    def ConnectToToolsBar(self, tb):
       for wdg in self.catWidgets.values():
@@ -922,6 +939,11 @@ class MainWidget(QtGui.QWidget):
       # sort all child widgets by title
       entries = sorted(self.entries, key=lambda entry: din5007(entry.label))
       self.Refill(entries)
+      
+   def StartManualTracking(self, entry):
+      dlg = ManualTrackingDialog(entry, self)
+      dlg.show()
+      dlg.AddTimeSignal.connect(self.AddManuallyTrackedTime)
       
    def SwapItems(self, id_a, id_b):
       e_a = self.entries[id_a]
