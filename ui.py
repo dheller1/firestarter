@@ -970,6 +970,9 @@ class MainWidget(QtGui.QWidget):
       self.PlaytimeChanged.emit(sum([e.totalTime for e in self.entries]))
       
 class MainWindow(QtGui.QMainWindow):
+   
+   RestartCode = 1337
+   
    def __init__(self):
       QtGui.QMainWindow.__init__(self)
       
@@ -993,6 +996,8 @@ class MainWindow(QtGui.QMainWindow):
       self.fileParser = FileParser()
       self.erroneousProfile = False
       self.profile = ProfileSettings()
+      
+      self.autosaveDisabled = False
       
       lastProfile = self.GetLastProfileName() # try to determine last profile first
       if lastProfile is not None and not os.path.isfile(lastProfile):
@@ -1024,7 +1029,9 @@ class MainWindow(QtGui.QMainWindow):
    #   self.fileParser.__del__()
    
    def closeEvent(self, e):
-      self.SaveProfile()
+      if not self.autosaveDisabled:
+         self.SaveProfile()
+         
       self.fileParser.__del__()
       QtGui.QMainWindow.closeEvent(self, e)
    
@@ -1194,7 +1201,9 @@ class MainWindow(QtGui.QMainWindow):
             for var, type in FileParser.entryFormats[bestEntryVersion]:
                 setattr(entry, var, getattr(eHndlr, var))
             
-            entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
+            try: entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
+            except IOError: # ignore icon loading errors, probably just opening the profile on another machine - just show the default icon
+               entry.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
                
             self.centralWidget().AddEntry(entry, manuallySorted=True) # always add as manually sorted, might be overwritten later
             
@@ -1242,7 +1251,13 @@ class MainWindow(QtGui.QMainWindow):
          fp.WriteByVersion(file=f, handler=p, version=profileVersion, type='profile')
          # no entries
    
-   def SaveProfile(self, filename=None):
+   def SaveProfile(self, filename=None, DisableAutosave=False):
+      """ Save profile to filename or to the current profile name if no filename is specified.
+        Use DisableAutosave to disable automatic saving (when closing the program) until the next
+        manual save. """
+      
+      self.autosaveDisabled = DisableAutosave
+      
       # do not save if profile was not loaded correctly
       if self.erroneousProfile: return
    
@@ -1283,6 +1298,31 @@ class MainWindow(QtGui.QMainWindow):
       self.centralWidget().SetIconSize(size)
       
       self.SaveProfile()
+      
+   def SwitchProfile(self):
+      pDlg = ProfileSelectionDialog(self)
+      result = pDlg.exec_()
+      if result == QtGui.QDialog.Rejected:
+         return None
+            
+      elif result == QtGui.QDialog.Accepted:
+         if pDlg.newProfile:
+            self.SaveDefaultProfile(pDlg.profileName)
+         name = pDlg.profileName
+         
+         # store as last profile
+         codepage = 'utf-8'
+         with codecs.open('lastprofile', 'w', codepage) as f:
+            f.write("# -*- coding: %s -*-\n" % codepage)
+            f.write(name)
+         
+         
+         # save profile
+         self.SaveProfile(DisableAutosave=True)
+            
+         # restart program
+         QtGui.qApp.exit(MainWindow.RestartCode)
+         
 
    def UpdateIconSizeFromMenu(self):
       # determine new icon size
@@ -1335,8 +1375,15 @@ class ProfileMenu(QtGui.QMenu):
    def __init__(self, parent=None):
       QtGui.QMenu.__init__(self, "&Profile", parent)
       
+      self.switchAction = QtGui.QAction("S&witch profile", self)
       self.settingsAction = QtGui.QAction("&Settings", self)
+      self.addAction(self.switchAction)
       self.addAction(self.settingsAction)
+      
+      self.InitConnections()
+      
+   def InitConnections(self):
+      self.switchAction.triggered.connect(self.parent().SwitchProfile)
       
 class FileMenu(QtGui.QMenu):
    def __init__(self, parent=None):

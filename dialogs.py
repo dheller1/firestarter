@@ -608,7 +608,8 @@ class ProfileSelectionDialog(QtGui.QDialog):
       selectedText = str(self.profileList.selectedItems()[0].text())
       
       if selectedText == self.newProfileText: # new profile
-         name,accepted = QtGui.QInputDialog.getText(self, "New profile", "Please enter a name for your new profile:", text="%s.dat" % os.environ.get("USERNAME"))
+         name,accepted = QtGui.QInputDialog.getText(self, "New profile", "Please enter a name for your new profile:", text="%s" % os.environ.get("USERNAME"))
+         name += ".dat"
          if accepted:
             self.newProfile = True
             self.profileName = str(name)

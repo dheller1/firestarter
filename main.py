@@ -34,15 +34,19 @@ def main():
    else:
       with open(pidfile, 'w') as pf: pf.write(pid)
 
-   flushLogfiles(("parser.log","steamapi.log"), 'utf-8')
-   app = QtGui.QApplication(sys.argv)
-   
-   
-   # run program
-   mainWnd = MainWindow()
-   mainWnd.show()
-   
-   ret = app.exec_()
+   ret = MainWindow.RestartCode
+   while ret == MainWindow.RestartCode:
+      flushLogfiles(("parser.log","steamapi.log"), 'utf-8')
+      
+      app = QtGui.QApplication(sys.argv)
+      # run program
+      mainWnd = MainWindow()
+      mainWnd.show()
+      
+      ret = app.exec_()
+      
+      del mainWnd
+      del app
 
    # cleanup and exit
    os.remove(pidfile)
