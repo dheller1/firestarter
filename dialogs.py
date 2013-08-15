@@ -399,33 +399,40 @@ class ChooseIconDialog(QtGui.QDialog):
       
       # determine number of icons in file
       numIcons = win32gui.ExtractIconEx(file, -1, 1)
-      if (numIcons == 0): return 0
+      if (numIcons == 0):
+         # try to load as image
+         icon = QtGui.QIcon(file)
+         id = -2
+
+         if icon is None:
+            return 0
       
-      for id in range(numIcons):
-         # load icon
-         hIcon = ctypes.c_int()
-         iconId = ctypes.c_int()
+      else:
+         for id in range(numIcons):
+            # load icon
+            hIcon = ctypes.c_int()
+            iconId = ctypes.c_int()
+            
+            # this is used instead of win32gui.ExtractIconEx because we need arbitrarily sized icons
+            res = usr32.PrivateExtractIconsW(ctypes.c_wchar_p(file), id, iconSize,\
+                                             iconSize, byref(hIcon), byref(iconId), 1, 0)
+            if (res == 0):
+               raise IOError("Could not extract icon #%i from file %s." % (id+1, file))
+               return
          
-         # this is used instead of win32gui.ExtractIconEx because we need arbitrarily sized icons
-         res = usr32.PrivateExtractIconsW(ctypes.c_wchar_p(file), id, iconSize,\
-                                          iconSize, byref(hIcon), byref(iconId), 1, 0)
-         if (res == 0):
-            raise IOError("Could not extract icon #%i from file %s." % (id+1, file))
-            return
-      
-         hIcon = hIcon.value # unpack c_int
-      
-         pm = QtGui.QPixmap.fromWinHICON(hIcon)
-         DestroyIcon(hIcon)
+            hIcon = hIcon.value # unpack c_int
          
-         icon = QtGui.QIcon()
-         icon.addPixmap(pm)
+            pm = QtGui.QPixmap.fromWinHICON(hIcon)
+            DestroyIcon(hIcon)
+            
+            icon = QtGui.QIcon()
+            icon.addPixmap(pm)
          
-         # add to list
-         listEntry = QtGui.QListWidgetItem(self.iconsList)
-         listEntry.setIcon(icon)
-         listEntry.file = os.path.abspath(file)
-         listEntry.id = id
+      # add to list
+      listEntry = QtGui.QListWidgetItem(self.iconsList)
+      listEntry.setIcon(icon)
+      listEntry.file = os.path.abspath(file)
+      listEntry.id = id
          
       # return number of successfully loaded icons
       return id+1
@@ -460,7 +467,7 @@ class ChooseIconDialog(QtGui.QDialog):
       
    def SelectFile(self):
       files = QtGui.QFileDialog.getOpenFileNames(self, "Select icon file(s):", os.path.dirname(self.basefile) if self.basefile else ".",\
-                                                 "Files containing icons (*.exe *.dll *.ico *.bmp);;All files (*.*)" )
+                                                 "Files containing images or icons (*.bmp *.png *.jpg *.gif *.exe *.dll *.ico);;All files (*.*)" )
       if len(files)>0:
          self.iconsList.clear()
          self.FillList(files)
@@ -474,7 +481,7 @@ class ChooseIconDialog(QtGui.QDialog):
    def SuggestFiles(self, file):
       files = []
       dir = os.path.dirname(file)
-      dirList =  os.listdir(dir)
+      dirList =  os.listdir(dir) if os.path.isdir(dir) else ["."]
       
       for f in dirList:
          if os.path.join(dir,f) != file and (f.endswith(".exe") or f.endswith(".dll") or f.endswith(".ico") or f.endswith(".bmp")):

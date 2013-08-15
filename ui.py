@@ -31,7 +31,7 @@ usr32 = ctypes.windll.user32
 
 from widgets import IconSizeComboBox, ToolsToolbar
 from dialogs import *
-from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage
+from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage, stringToFilename
 
 class AppStarterEntry(QtCore.QObject):
    ManualTracking = pyqtSignal(object)
@@ -87,10 +87,17 @@ class AppStarterEntry(QtCore.QObject):
       self.totalTime = pickle.load(file)
          
    def LoadIcon(self, iconSize=256):
-      if self.preferredIcon < 0:
+      # No Icon
+      if self.preferredIcon == -1:
          self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
          return
       
+      # Load Icon from local icon library
+      elif self.preferredIcon == -2:
+         self.icon=QtGui.QIcon(self.iconPath)
+         return
+      
+      ###ELSE:
       # determine number of icons
       numIcons = win32gui.ExtractIconEx(self.iconPath, -1, 1)
       if(self.preferredIcon >= numIcons): self.preferredIcon = 0
@@ -848,6 +855,20 @@ class MainWidget(QtGui.QWidget):
          QtGui.QMessageBox.warning(self, "Warning", "No icon found in '%s.'" % file)
          entry.preferredIcon = -1
          entry.LoadIcon(256) # load default icon
+         
+      if entry.preferredIcon != -1:
+         # try to copy and save icon to a local folder in case the icon becomes unavailable in the future
+         pm = entry.icon.pixmap(entry.icon.actualSize(QtCore.QSize(256,256)))
+         
+         iconFilename = stringToFilename(entry.label)
+         i = 0
+         while(os.path.exists(os.path.join("cache", "icons", iconFilename))):
+            iconFilename = "%s%i" % (stringToFilename(entry.label), i)
+            
+         fullName = os.path.join("cache", "icons", iconFilename+".png")
+         pm.save(fullName, "PNG", 100)
+         entry.preferredIcon = -2
+         entry.iconPath = fullName
       
       self.AddEntry(entry)
       self.parent().SaveProfile()
@@ -1199,10 +1220,28 @@ class MainWindow(QtGui.QMainWindow):
                   
             # copy data from EntrySettings object to actual entry
             for var, type in FileParser.entryFormats[bestEntryVersion]:
-                setattr(entry, var, getattr(eHndlr, var))
+               setattr(entry, var, getattr(eHndlr, var))
             
+            failedToLoadIcon = False
             try: entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
             except IOError: # ignore icon loading errors, probably just opening the profile on another machine - just show the default icon
+               failedToLoadIcon = True
+               
+            if entry.preferredIcon != -1 and not failedToLoadIcon:
+               # try to copy and save icon to a local folder in case the icon becomes unavailable in the future
+               pm = entry.icon.pixmap(entry.icon.actualSize(QtCore.QSize(256,256)))
+               
+               iconFilename = stringToFilename(entry.label)
+               i = 0
+               while(os.path.exists(os.path.join("cache", "icons", iconFilename))):
+                  iconFilename = "%s%i" % (stringToFilename(entry.label), i)
+                  
+               fullName = os.path.join("cache", "icons", iconFilename+".png")
+               pm.save(fullName, "PNG", 100)
+               entry.preferredIcon = -2
+               entry.iconPath = fullName
+            
+            elif failedToLoadIcon:
                entry.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
                
             self.centralWidget().AddEntry(entry, manuallySorted=True) # always add as manually sorted, might be overwritten later

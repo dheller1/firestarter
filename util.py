@@ -7,7 +7,7 @@
 
 import codecs
 import time, datetime
-import threading
+import threading, string
 from types import *
 
 STAMPFORMAT = '(%d.%m.%Y - %H:%M:%S) '
@@ -448,3 +448,7 @@ def din5007(input):
    # in case two words are the same according to key1, sort the words
    # according to key2. 
    return (key1, key2)
+
+def stringToFilename(s):
+   validChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+   return ''.join(char for char in s if char in validChars)

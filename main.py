@@ -33,6 +33,12 @@ def main():
    if running: sys.exit()
    else:
       with open(pidfile, 'w') as pf: pf.write(pid)
+      
+   # verify cache directory structure
+   if not os.path.isdir("cache"):
+      os.makedirs("cache")
+   if not os.path.isdir(os.path.join("cache", "icons")):
+      os.makedirs(os.path.join("cache", "icons"))
 
    ret = MainWindow.RestartCode
    while ret == MainWindow.RestartCode:
