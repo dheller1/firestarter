@@ -735,6 +735,7 @@ class CategoryListAndDetailsWidget(QtGui.QWidget):
       self.LastItemSelected.emit()
    def ProfileChangedSlot(self):
       self.ProfileChanged.emit()
+   
       
 class MainWidget(QtGui.QWidget):
    ManualSortingEnabled = pyqtSignal()
@@ -1096,6 +1097,7 @@ class MainWindow(QtGui.QMainWindow):
       self.toolsBar.iconSizeComboBox.IconSizeChanged.connect(self.SetIconSize)
       self.toolsBar.upBtn.clicked.connect(self.centralWidget().MoveItemUp)
       self.toolsBar.downBtn.clicked.connect(self.centralWidget().MoveItemDown)
+      self.toolsBar.statsBtn.clicked.connect(self.ShowStats)
       
       self.toolsBar.sortComboBox.ManualSortingSelected.connect(self.centralWidget().RestoreLastManualSorting)
       self.toolsBar.sortComboBox.SortByTitleSelected.connect(self.centralWidget().SortByTitle)
@@ -1337,6 +1339,10 @@ class MainWindow(QtGui.QMainWindow):
       self.centralWidget().SetIconSize(size)
       
       self.SaveProfile()
+      
+   def ShowStats(self):
+      dlg = StatsOverviewDialog(self.centralWidget().entries, self)
+      dlg.show()
       
    def SwitchProfile(self):
       pDlg = ProfileSelectionDialog(self)

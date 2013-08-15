@@ -20,7 +20,7 @@ from win32gui_struct import *
 import win32com.client
 usr32 = ctypes.windll.user32
 
-from widgets import IconSizeComboBox, AutoSelectAllLineEdit
+from widgets import IconSizeComboBox, AutoSelectAllLineEdit, OverviewRenderArea
 from steamapi import SteamApi
 from util import formatTime
 
@@ -752,3 +752,67 @@ class EntryPropertiesDialog(QtGui.QDialog):
       self.chooseIcon.clicked.connect(self.ChangeIcon)
       self.chooseExecutable.clicked.connect(self.ChangeExecutable)
       self.chooseWorkingDir.clicked.connect(self.ChangeWorkingDir)
+      
+class StatsOverviewDialog(QtGui.QMainWindow):
+   def __init__(self, entries, parent=None):
+      QtGui.QMainWindow.__init__(self, parent)
+      
+      self.setWindowTitle(u"Games overview")
+      self.resize(840,610)
+      
+      self.entries = entries
+      
+      self.InitLayout()
+      self.InitConnections()
+      
+   def InitLayout(self):
+      self.ra = OverviewRenderArea(self.entries, self)
+      #self.toolBar = QtGui.QToolBar()
+      
+#       sc = "Ctrl+P"
+#       printViewShortcut = QtGui.QKeySequence(sc)
+#       self.printAct = QtGui.QAction(QtGui.QIcon('gfx/icon_drucken.png'), "Drucken (%s)" % sc.replace("Ctrl", "Strg"), self)
+#       self.printAct.setShortcut(printViewShortcut)
+#       
+#       self.previewAct = QtGui.QAction(QtGui.QIcon('gfx/pagepreview.png'), "Druckvorschau", self)
+#       self.printToFileCb = QtGui.QCheckBox("In Datei drucken")
+# 
+#       self.onlyCommandCardsCb = QtGui.QCheckBox("Nur Kommandokarten")
+#       self.onlyCommandCardsCb.setChecked(True)
+#       
+#       self.cardCb = QtGui.QComboBox()
+#       
+#       self.zoomSlider = QtGui.QSlider(Qt.Horizontal, self)
+#       self.zoomSlider.setMaximumWidth(200)
+#       self.zoomLbl = QtGui.QLabel("100%")
+#       
+#       self.zoomSlider.steps = (.15,.2,.25,.33,.4,.5,.66,.75,.85,1.,1.2,1.33,1.5,1.75,2.,2.5,3.)
+#       self.zoomSlider.setRange(0,len(self.zoomSlider.steps)-1)
+#       self.zoomSlider.setSliderPosition(self.zoomSlider.steps.index(1.))
+#       
+#       self.toolBar.addAction(self.printAct)
+#       self.toolBar.addAction(self.previewAct)
+#       self.toolBar.addWidget(self.printToFileCb)
+#       self.toolBar.addSeparator()
+#       self.toolBar.addWidget(self.onlyCommandCardsCb)
+#       self.toolBar.addWidget(self.cardCb)
+#       self.toolBar.addSeparator()
+#       self.toolBar.addWidget(QtGui.QLabel("Zoom:"))
+#       self.toolBar.addWidget(self.zoomSlider)
+#       self.toolBar.addWidget(self.zoomLbl)
+#       self.toolBar.addWidget(QtGui.QWidget())
+      
+      sa = QtGui.QScrollArea()
+      sa.setWidget(self.ra)
+      self.setCentralWidget(sa)
+#      self.addToolBar(self.toolBar)
+      
+   def InitConnections(self):
+      pass
+#       self.zoomSlider.valueChanged.connect(self.ChangeZoom)
+      
+#    def ChangeZoom(self, zoomlevel):
+#       zoom = self.zoomSlider.steps[zoomlevel]
+#       self.zoomLbl.setText("%i%%" % int(100.*zoom))
+#       self.ra.SetZoom(zoom)
+#       self.ra.repaint()

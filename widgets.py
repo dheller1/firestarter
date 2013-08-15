@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import os
+import os, copy
 
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt, pyqtSignal
@@ -83,11 +83,15 @@ class ToolsToolbar(QtGui.QToolBar):
       self.downBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "Actions-arrow-down-icon.png")))
       self.downBtn.setEnabled(False)
       
+      self.statsBtn = QtGui.QPushButton()
+      self.statsBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "stats.png")))
+      
       # init layout
       dwWdg = QtGui.QWidget(self)
       dwWdg.setLayout(QtGui.QHBoxLayout())
       
       dwWdg.layout().addWidget(self.totalTime)
+      dwWdg.layout().addWidget(self.statsBtn)
       dwWdg.layout().addStretch(1)
       dwWdg.layout().addWidget(self.sortComboBox)
       dwWdg.layout().addWidget(self.upBtn)
@@ -117,3 +121,85 @@ class AutoSelectAllLineEdit(QtGui.QLineEdit):
    def mousePressEvent(self, e):
       QtGui.QWidget.mousePressEvent(self, e)
       self.selectAll()
+      
+class OverviewRenderArea(QtGui.QWidget):
+   def __init__(self, entries, parent=None):
+      QtGui.QWidget.__init__(self)
+      
+      self.entries = entries
+      
+      self.zoom = 1.
+      self.setSizePolicy(QtGui.QSizePolicy.Maximum, QtGui.QSizePolicy.Maximum)
+      
+      self.setBackgroundRole(QtGui.QPalette.Base)
+      self.setAutoFillBackground(True)
+      
+      self.iconSize = 32
+      self.fontSize = 16
+      self.largeFontFactor = 1.5
+      self.margin = 2
+      self.vspace = 5
+      self.border = 1
+      
+      entryWidth = self.zoom * (600+2*self.margin + self.vspace + 2*self.border)
+      self.setMinimumSize(entryWidth + 2*self.vspace, 40)
+      
+   def paintEvent(self, event):
+      entryHeight = self.zoom * ( self.iconSize + 2*self.margin + 2*self.border)
+      entryWidth = self.zoom * (600+2*self.margin + self.vspace + 2*self.border)
+      
+      labelFont = QtGui.QFont("Cambria", self.zoom*self.fontSize*self.largeFontFactor)
+      labelFont.setBold(True)
+      timeFont = QtGui.QFont("Calibri", self.zoom*self.fontSize)
+      timeFont.setBold(False)
+      
+      painter = QtGui.QPainter(self)
+      
+      defaultPen = QtGui.QPen()
+      defaultBrush = QtGui.QBrush()
+      painter.setPen(defaultPen)
+      painter.setBrush(defaultBrush)
+      
+      barPen = QtGui.QPen(Qt.NoPen)
+      barBrush = QtGui.QBrush(Qt.green)
+      
+      self.setMinimumSize(entryWidth+ 2*self.vspace, len(self.entries) * (entryHeight+self.vspace) + self.vspace)
+
+      painter.translate(self.vspace, self.vspace)
+      
+      tmax = max([e.totalTime for e in self.entries])
+      
+      for entry in self.entries:
+         
+         # begin painting
+         if self.border != 0:
+            painter.save()
+            defaultPen.setWidth(self.border)
+            borderRect = QtCore.QRect(0, 0, entryWidth, entryHeight)
+            painter.drawRect(borderRect)
+            painter.restore()
+         
+         innerRect = QtCore.QRect(self.margin + self.border, self.margin + self.border, entryWidth - 2*(self.margin+self.border), entryHeight-2*(self.margin+self.border))
+         barRect = copy.copy(innerRect)
+         barRect.setLeft(barRect.left()+ self.iconSize + self.vspace)
+         
+         # playtime bar
+         fillPct = entry.totalTime / tmax
+         barRect.setWidth(max(1, fillPct * barRect.width()))
+
+         painter.save()         
+         painter.setPen(barPen)
+         painter.setBrush(barBrush)
+         painter.drawRect(barRect)
+         painter.restore()
+         
+         # icon and title
+         painter.setFont(labelFont)
+         painter.drawPixmap(innerRect.topLeft(), entry.icon.pixmap(self.iconSize, self.iconSize))
+         painter.drawText(innerRect.translated(self.iconSize+self.vspace, 0), Qt.AlignVCenter, entry.label)
+         
+         # playtime
+         painter.setFont(timeFont)
+         painter.drawText(innerRect, Qt.AlignRight, formatTime(entry.totalTime)+ " played")
+         
+         painter.translate(0, entryHeight + self.vspace)
