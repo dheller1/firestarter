@@ -7,7 +7,6 @@ from PyQt4.QtCore import Qt, pyqtSignal
 
 from util import formatTime
 
-
 class IconSizeComboBox(QtGui.QComboBox):
    supportedIconSizes = (32, 48, 128, 256)
    textTemplate = "%ix%i px" 
@@ -131,12 +130,12 @@ class OverviewRenderArea(QtGui.QWidget):
       self.zoom = 1.
       self.setSizePolicy(QtGui.QSizePolicy.Maximum, QtGui.QSizePolicy.Maximum)
       
-      self.setBackgroundRole(QtGui.QPalette.Base)
+      self.setBackgroundRole(QtGui.QPalette.Shadow)
       self.setAutoFillBackground(True)
       
       self.iconSize = 32
-      self.fontSize = 16
-      self.largeFontFactor = 1.5
+      self.fontSize = 12
+      self.largeFontFactor = 1.72
       self.margin = 2
       self.vspace = 5
       self.border = 1
@@ -145,25 +144,50 @@ class OverviewRenderArea(QtGui.QWidget):
       self.setMinimumSize(entryWidth + 2*self.vspace, 40)
       
    def paintEvent(self, event):
+      # geometry calculations
       entryHeight = self.zoom * ( self.iconSize + 2*self.margin + 2*self.border)
       entryWidth = self.zoom * (600+2*self.margin + self.vspace + 2*self.border)
+      
+      fullRect = QtCore.QRect(0, 0, entryWidth+ 2*self.vspace, len(self.entries) * (entryHeight+self.vspace) + self.vspace)
+      innerRect = QtCore.QRect(self.margin + self.border, self.margin + self.border, entryWidth - 2*(self.margin+self.border), entryHeight-2*(self.margin+self.border))
+      self.setMinimumSize(fullRect.size())
+      
+      # create painter, fonts, pens and brushes
+      painter = QtGui.QPainter(self)
       
       labelFont = QtGui.QFont("Cambria", self.zoom*self.fontSize*self.largeFontFactor)
       labelFont.setBold(True)
       timeFont = QtGui.QFont("Calibri", self.zoom*self.fontSize)
       timeFont.setBold(False)
+      textPen = QtGui.QPen(Qt.white)
       
-      painter = QtGui.QPainter(self)
+      bgGrad = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(0,fullRect.height()))
+      bgGrad.setColorAt(0, QtGui.QColor(63,63,61))
+      bgGrad.setColorAt(0.15, QtGui.QColor(55,55,55))
+      bgGrad.setColorAt(1, QtGui.QColor(38,38,39))
       
-      defaultPen = QtGui.QPen()
+      backgroundBrush = QtGui.QBrush(bgGrad)
+      
+      defaultPen = QtGui.QPen(QtGui.QColor(124,124,124))
       defaultBrush = QtGui.QBrush()
       painter.setPen(defaultPen)
       painter.setBrush(defaultBrush)
       
-      barPen = QtGui.QPen(Qt.NoPen)
-      barBrush = QtGui.QBrush(Qt.green)
+      barGrad = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(innerRect.width(),0))
+      barGrad.setColorAt(0, QtGui.QColor(138,138,138))
+      barGrad.setColorAt(0.5, QtGui.QColor(110,110,110))
+      barGrad.setColorAt(1, QtGui.QColor(75,75,75))
       
-      self.setMinimumSize(entryWidth+ 2*self.vspace, len(self.entries) * (entryHeight+self.vspace) + self.vspace)
+      barPen = QtGui.QPen(Qt.NoPen)
+      barBrush = QtGui.QBrush(barGrad)
+      
+      
+      # draw background
+      painter.save()
+      painter.setBrush(backgroundBrush)
+      painter.setPen(Qt.NoPen)
+      painter.drawRect(fullRect)
+      painter.restore()
 
       painter.translate(self.vspace, self.vspace)
       
@@ -179,7 +203,6 @@ class OverviewRenderArea(QtGui.QWidget):
             painter.drawRect(borderRect)
             painter.restore()
          
-         innerRect = QtCore.QRect(self.margin + self.border, self.margin + self.border, entryWidth - 2*(self.margin+self.border), entryHeight-2*(self.margin+self.border))
          barRect = copy.copy(innerRect)
          barRect.setLeft(barRect.left()+ self.iconSize + self.vspace)
          
@@ -194,12 +217,15 @@ class OverviewRenderArea(QtGui.QWidget):
          painter.restore()
          
          # icon and title
+         painter.save()
          painter.setFont(labelFont)
          painter.drawPixmap(innerRect.topLeft(), entry.icon.pixmap(self.iconSize, self.iconSize))
+         painter.setPen(textPen)
          painter.drawText(innerRect.translated(self.iconSize+self.vspace, 0), Qt.AlignVCenter, entry.label)
          
          # playtime
          painter.setFont(timeFont)
-         painter.drawText(innerRect, Qt.AlignRight, formatTime(entry.totalTime)+ " played")
+         painter.drawText(innerRect, Qt.AlignRight | Qt.AlignBottom, formatTime(entry.totalTime)+ " played")
+         painter.restore()
          
          painter.translate(0, entryHeight + self.vspace)

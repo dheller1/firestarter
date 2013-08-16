@@ -34,11 +34,11 @@ def main():
    else:
       with open(pidfile, 'w') as pf: pf.write(pid)
       
-   # verify cache directory structure
-   if not os.path.isdir("cache"):
-      os.makedirs("cache")
-   if not os.path.isdir(os.path.join("cache", "icons")):
-      os.makedirs(os.path.join("cache", "icons"))
+   # verify directory structure
+   neededFolders = ("cache", "cache/icons", "cache/steam", "export")
+   for folder in neededFolders:
+      if not os.path.isdir(folder):
+         os.makedirs(folder)
 
    ret = MainWindow.RestartCode
    while ret == MainWindow.RestartCode:

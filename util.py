@@ -25,6 +25,8 @@ class ProfileSettings:
       self.steamId = None
       #self.entries = []
       
+      self.steamGames = []
+      
    @staticmethod
    def Default():
       d = ProfileSettings()
@@ -35,6 +37,7 @@ class ProfileSettings:
       d.toolsVisible = 1
       d.sortMode = "manual"
       d.steamId = '0'
+      d.steamGames = []
       return d
 
 class EntrySettings:

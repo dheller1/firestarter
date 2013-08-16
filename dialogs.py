@@ -23,7 +23,9 @@ usr32 = ctypes.windll.user32
 from widgets import IconSizeComboBox, AutoSelectAllLineEdit, OverviewRenderArea
 from steamapi import SteamApi
 from util import formatTime
+from steamapi import SteamEntry
 
+lastdir = "."
 
 class SteamProfileDialog(QtGui.QDialog):
    FailedSteamIdQuery = pyqtSignal()
@@ -81,6 +83,9 @@ class SteamProfileDialog(QtGui.QDialog):
          
          self.cancelBtn = QtGui.QPushButton("&Cancel", self)
          self.cancelBtn.clicked.connect(self.parent().reject)
+         
+         self.downloadInfoCb = QtGui.QCheckBox("&Download profile data", self)
+         self.downloadInfoCb.setChecked(True)
       
          dlgNavLay = QtGui.QHBoxLayout()
          dlgNavLay.addWidget(self.cancelBtn)
@@ -90,11 +95,12 @@ class SteamProfileDialog(QtGui.QDialog):
          
          layout = QtGui.QGridLayout()
          layout.addWidget(QtGui.QLabel("Connect to profile?"), 0, 0, 1, 2)
-         layout.addWidget(self.avatarLbl, 1, 0, 3, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
+         layout.addWidget(self.avatarLbl, 1, 0, 4, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
          layout.addWidget(self.nameLbl, 1, 1)
          layout.addWidget(self.steamIdLbl, 2, 1)
          layout.addWidget(self.lastOnlineLbl, 3, 1)
-         layout.addLayout(dlgNavLay, 4, 0, 1, 2)
+         layout.addWidget(self.downloadInfoCb, 4, 1)
+         layout.addLayout(dlgNavLay, 5, 0, 1, 2)
          
          layout.setRowStretch(1, 1)
          
@@ -141,6 +147,11 @@ class SteamProfileDialog(QtGui.QDialog):
       
    def __del__(self):
       self.steamapi.__del__()
+      
+   def accept(self):
+      self.downloadProfileData = self.confirmProfileWdg.downloadInfoCb.isChecked()
+      
+      QtGui.QDialog.accept(self)
       
    def reject(self):
       # disconnect all connections to not respond to any threads still working when they finish
@@ -321,12 +332,15 @@ class ChooseIconDialog(QtGui.QDialog):
        When called with exec_(), the call returns 'None' if Cancel was pressed, otherwise it returns a tuple of (filename,id)
        for the icon in 'filename' with id 'id'. """
    def __init__(self, parent=None, file=None, suggestions=False):
+      global lastdir
       QtGui.QDialog.__init__(self, parent)
       
       self.setWindowTitle("Choose icon")
       self.resize(600,380)
       
       self.basefile = file
+      if self.basefile:
+         lastdir = os.path.dirname(self.basefile)
       self.noIcon = False # only set true if 'No icon' is clicked
       
       # create widgets
@@ -466,11 +480,16 @@ class ChooseIconDialog(QtGui.QDialog):
       self.accept()
       
    def SelectFile(self):
-      files = QtGui.QFileDialog.getOpenFileNames(self, "Select icon file(s):", os.path.dirname(self.basefile) if self.basefile else ".",\
+      global lastdir
+      if lastdir == ":" and self.basefile:
+         lastdir = os.path.dirname(self.basefile)
+         
+      files = QtGui.QFileDialog.getOpenFileNames(self, "Select icon file(s):", lastdir,\
                                                  "Files containing images or icons (*.bmp *.png *.jpg *.gif *.exe *.dll *.ico);;All files (*.*)" )
       if len(files)>0:
          self.iconsList.clear()
          self.FillList(files)
+         lastdir = os.path.dirname(str(files[0]))
          
    def SelectionChanged(self):
       self.okBtn.setEnabled(len(self.iconsList.selectedItems())==1)
@@ -752,64 +771,60 @@ class EntryPropertiesDialog(QtGui.QDialog):
       self.chooseIcon.clicked.connect(self.ChangeIcon)
       self.chooseExecutable.clicked.connect(self.ChangeExecutable)
       self.chooseWorkingDir.clicked.connect(self.ChangeWorkingDir)
-      
+
 class StatsOverviewDialog(QtGui.QMainWindow):
-   def __init__(self, entries, parent=None):
+   def __init__(self, entries, parent=None, steamGames=[]):
       QtGui.QMainWindow.__init__(self, parent)
       
       self.setWindowTitle(u"Games overview")
-      self.resize(840,610)
+      self.resize(645,640) # width 645 magic number
       
       self.entries = entries
+      
+      if steamGames != []:
+         games = []
+         for g in steamGames:
+            se = SteamEntry()
+            se.label = g.name
+            se.totalTime = 60.*g.playtime
+            se.iconFile = "%s_%s.jpg" % (g.appid, g.iconUrl)
+            se.LoadIcon()
+            
+            games.append(se)
+         
+         games.extend(entries)
+         self.entries = sorted(games, key=lambda entry: entry.totalTime, reverse=True)
       
       self.InitLayout()
       self.InitConnections()
       
    def InitLayout(self):
       self.ra = OverviewRenderArea(self.entries, self)
-      #self.toolBar = QtGui.QToolBar()
+      self.toolBar = QtGui.QToolBar()
       
-#       sc = "Ctrl+P"
-#       printViewShortcut = QtGui.QKeySequence(sc)
-#       self.printAct = QtGui.QAction(QtGui.QIcon('gfx/icon_drucken.png'), "Drucken (%s)" % sc.replace("Ctrl", "Strg"), self)
-#       self.printAct.setShortcut(printViewShortcut)
-#       
-#       self.previewAct = QtGui.QAction(QtGui.QIcon('gfx/pagepreview.png'), "Druckvorschau", self)
-#       self.printToFileCb = QtGui.QCheckBox("In Datei drucken")
-# 
-#       self.onlyCommandCardsCb = QtGui.QCheckBox("Nur Kommandokarten")
-#       self.onlyCommandCardsCb.setChecked(True)
-#       
-#       self.cardCb = QtGui.QComboBox()
-#       
-#       self.zoomSlider = QtGui.QSlider(Qt.Horizontal, self)
-#       self.zoomSlider.setMaximumWidth(200)
-#       self.zoomLbl = QtGui.QLabel("100%")
-#       
-#       self.zoomSlider.steps = (.15,.2,.25,.33,.4,.5,.66,.75,.85,1.,1.2,1.33,1.5,1.75,2.,2.5,3.)
-#       self.zoomSlider.setRange(0,len(self.zoomSlider.steps)-1)
-#       self.zoomSlider.setSliderPosition(self.zoomSlider.steps.index(1.))
-#       
-#       self.toolBar.addAction(self.printAct)
-#       self.toolBar.addAction(self.previewAct)
-#       self.toolBar.addWidget(self.printToFileCb)
-#       self.toolBar.addSeparator()
-#       self.toolBar.addWidget(self.onlyCommandCardsCb)
-#       self.toolBar.addWidget(self.cardCb)
-#       self.toolBar.addSeparator()
-#       self.toolBar.addWidget(QtGui.QLabel("Zoom:"))
-#       self.toolBar.addWidget(self.zoomSlider)
-#       self.toolBar.addWidget(self.zoomLbl)
-#       self.toolBar.addWidget(QtGui.QWidget())
+      sc = "Ctrl+S"
+      saveViewShortcut = QtGui.QKeySequence(sc)
+      self.saveAct = QtGui.QAction(QtGui.QIcon('gfx/save.png'), "Bild speichern (%s)" % sc.replace("Ctrl", "Strg"), self)
+      self.saveAct.setShortcut(saveViewShortcut)
+      
+      self.toolBar.addAction(self.saveAct)
       
       sa = QtGui.QScrollArea()
+      sa.setBackgroundRole(QtGui.QPalette.Shadow)
+      sa.setAutoFillBackground(True)
       sa.setWidget(self.ra)
+      sa.setAlignment(Qt.AlignCenter)
       self.setCentralWidget(sa)
-#      self.addToolBar(self.toolBar)
+      self.addToolBar(self.toolBar)
       
    def InitConnections(self):
-      pass
-#       self.zoomSlider.valueChanged.connect(self.ChangeZoom)
+      self.saveAct.triggered.connect(self.SaveImage)
+      
+   def SaveImage(self):
+      pm = QtGui.QPixmap.grabWidget(self.ra)
+      filename = QtGui.QFileDialog.getSaveFileName(self, "Save image...", "export", "Images (*.png *.jpg *.gif *.bmp);;All files (*.*)")
+      if filename != "":
+         pm.save(filename, format=None, quality=100)
       
 #    def ChangeZoom(self, zoomlevel):
 #       zoom = self.zoomSlider.steps[zoomlevel]

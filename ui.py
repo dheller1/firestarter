@@ -32,6 +32,7 @@ usr32 = ctypes.windll.user32
 from widgets import IconSizeComboBox, ToolsToolbar
 from dialogs import *
 from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage, stringToFilename
+from steamapi import SteamGameStats
 
 class AppStarterEntry(QtCore.QObject):
    ManualTracking = pyqtSignal(object)
@@ -125,7 +126,7 @@ class AppStarterEntry(QtCore.QObject):
    
       self.icon = QtGui.QIcon()
       self.icon.addPixmap(pm)
-      self.iconSize = iconSize
+      self.loadedIconSize = iconSize
       
    def Run(self):
       if self.running:
@@ -992,7 +993,6 @@ class MainWidget(QtGui.QWidget):
       self.PlaytimeChanged.emit(sum([e.totalTime for e in self.entries]))
       
 class MainWindow(QtGui.QMainWindow):
-   
    RestartCode = 1337
    
    def __init__(self):
@@ -1083,6 +1083,46 @@ class MainWindow(QtGui.QMainWindow):
                                                  QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
             if confirm == QtGui.QMessageBox.No: return
          self.profile.steamId = dlg.steamId
+         
+         if dlg.downloadProfileData:
+            self.setCursor(Qt.WaitCursor)
+            QtGui.qApp.processEvents()
+            
+            api = SteamApi()
+            games = api.GetOwnedGames(dlg.steamId)
+            
+            gameObjs = []
+            for g in games:
+               if "playtime_forever" in g and g["playtime_forever"] > 0:
+                  gameObj = SteamGameStats(g["appid"], g["name"], g["playtime_forever"], g["img_icon_url"], g["img_logo_url"])
+                  gameObjs.append(gameObj)
+                   
+            dls = 0
+            alreadyPresent = 0
+            
+            # download icons
+            for g in gameObjs:
+               iconurl = "http://media.steampowered.com/steamcommunity/public/images/apps/%s/%s.jpg" % (g.appid, g.iconUrl)
+               localPath = os.path.join("cache", "steam", "%s_%s.jpg" % (g.appid, g.iconUrl)) 
+               
+               if os.path.isfile(localPath):
+                  alreadyPresent += 1
+                  continue
+               
+               try:
+                  with open(localPath, 'wb') as localFile:
+                     iconFile = urllib2.urlopen(iconurl, timeout=20)
+                     localFile.write(iconFile.read())
+                     iconFile.close()
+                  dls += 1
+               except (IOError, urllib2.URLError):
+                  continue
+
+               #print "%s: %s" % (g.name, formatTime(60.*g.playtime))
+            
+            self.profile.steamGames = gameObjs
+            self.setCursor(Qt.ArrowCursor)
+         
          self.SaveProfile()
    
    def GetLastProfileName(self):
@@ -1341,7 +1381,7 @@ class MainWindow(QtGui.QMainWindow):
       self.SaveProfile()
       
    def ShowStats(self):
-      dlg = StatsOverviewDialog(self.centralWidget().entries, self)
+      dlg = StatsOverviewDialog(self.centralWidget().entries, self, self.profile.steamGames)
       dlg.show()
       
    def SwitchProfile(self):

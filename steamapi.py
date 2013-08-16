@@ -5,12 +5,12 @@ Created on 03.01.2013
 @author: heller
 '''
 
-import time
+import time, os
 import json
 import urllib2
 import xml.dom.minidom
 import xml.parsers.expat
-from util import LogHandler
+from util import LogHandler, formatTime
 from PyQt4 import QtGui, QtCore
 
 
@@ -19,6 +19,30 @@ username = 'hasustyle'
 class PlayerSummary(object):
    def __init__(self):
       pass
+   
+class SteamEntry(QtCore.QObject):
+   def __init__(self, parentWidget=None):
+      self.icon = None
+      self.loadedIconSize = 32
+      self.iconFile = ""
+      self.label = u"Unknown Steam application"
+      self.totalTime = 0.
+      
+   def LoadIcon(self, iconSize=32):
+      iconPath = os.path.join("cache", "steam", "%s" % self.iconFile)
+      
+      if not os.path.isfile(iconPath):
+         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
+      else:
+         self.icon=QtGui.QIcon(iconPath)
+   
+class SteamGameStats:
+   def __init__(self, appid, name, playtime, iconUrl=None, logoUrl=None):
+      self.appid = appid
+      self.name = name
+      self.playtime = playtime
+      self.iconUrl = iconUrl
+      self.logoUrl = logoUrl
 
 class SteamApi(LogHandler):
    ERR_INVALID_USER = 1
@@ -73,7 +97,50 @@ class SteamApi(LogHandler):
       
       # for invalid steam id, this list will be empty!
       return playerSummaries
+   
+   def GetGameNamesByAppId(self, appids, steamid):
+      if len(appids) < 1: return
+      #elif len(appids) > 100:
+      #   raise ValueError("GetGameNamesByAppId called with a list of %i app IDs, maximum of 100 IDs is supported!" % len(appids))
       
+      names = []
+      nameById = {}
+      for appid in appids:
+         request = 'http://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v0002/?appid=%s&key=%s&steamid=%s' % (appid, SteamApi.auth_key, steamid)
+      
+         self._Log("User stats for game query: %s" % request)
+         # fetch result
+         try:
+            f = urllib2.urlopen(request, timeout=10)
+         except urllib2.URLError: # timeout
+            self._Log("Timeout, no connection to Steam.")
+            break
+         
+         response = json.load(f, encoding='utf-8')
+         f.close()
+         
+         name = response["playerstats"]["gameName"]
+         names.append(name)
+         nameById[appid] = name
+      
+      return names, nameById
+   
+   def GetOwnedGames(self, steamid):
+      request = 'http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=%s&steamid=%s&include_appinfo=1&include_played_free_games=1&format=json' % (SteamApi.auth_key, steamid)
+      
+      self._Log("Owned games query: %s" % request)
+      # fetch result
+      try:
+         f = urllib2.urlopen(request, timeout=10)
+      except urllib2.URLError: # timeout
+         self._Log("Timeout, no connection to Steam.")
+         return []
+      
+      response = json.load(f, encoding='utf-8')["response"]
+      f.close()
+      
+      self._Log("Received %i owned games (game count: %i)" % (len(response["games"]), response["game_count"]))
+      return response["games"]
    
    def GetSteamIdByUsername(self, username):
       # try to fetch xml profile, this might take several tries
@@ -108,3 +175,17 @@ class SteamApi(LogHandler):
       self._Log("Received profile ID %i after %.2f seconds." % (id, time.clock()-startTime))
       
       return id
+   
+   
+# a = SteamApi()
+# games = a.GetOwnedGames("76561197968959644")
+# 
+# gameObjs = []
+# for g in games:
+#    if "playtime_forever" in g and g["playtime_forever"] > 0:
+#       gameObj = SteamGameStats(g["appid"], g["name"], g["playtime_forever"], g["img_icon_url"], g["img_logo_url"])
+#       gameObjs.append(gameObj)
+#       
+# for g in gameObjs:
+#    print "%s: %s" % (g.name, formatTime(60.*g.playtime))
+#    print "http://media.steampowered.com/steamcommunity/public/images/apps/%s/%s.jpg" % (g.appid, g.logoUrl)
