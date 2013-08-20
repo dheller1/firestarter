@@ -1051,6 +1051,8 @@ class MainWindow(QtGui.QMainWindow):
    #   self.fileParser.__del__()
    
    def closeEvent(self, e):
+      self.hide()
+      
       if not self.autosaveDisabled:
          self.SaveProfile()
          

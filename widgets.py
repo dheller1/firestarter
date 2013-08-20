@@ -140,15 +140,18 @@ class OverviewRenderArea(QtGui.QWidget):
       self.vspace = 5
       self.border = 1
       
+      self.numEntries = 20
+      
       entryWidth = self.zoom * (600+2*self.margin + self.vspace + 2*self.border)
       self.setMinimumSize(entryWidth + 2*self.vspace, 40)
       
    def paintEvent(self, event):
+      numEntries = min(self.numEntries, len(self.entries))
       # geometry calculations
       entryHeight = self.zoom * ( self.iconSize + 2*self.margin + 2*self.border)
       entryWidth = self.zoom * (600+2*self.margin + self.vspace + 2*self.border)
       
-      fullRect = QtCore.QRect(0, 0, entryWidth+ 2*self.vspace, len(self.entries) * (entryHeight+self.vspace) + self.vspace)
+      fullRect = QtCore.QRect(0, 0, entryWidth+ 2*self.vspace, numEntries * (entryHeight+self.vspace) + self.vspace)
       innerRect = QtCore.QRect(self.margin + self.border, self.margin + self.border, entryWidth - 2*(self.margin+self.border), entryHeight-2*(self.margin+self.border))
       self.setMinimumSize(fullRect.size())
       
@@ -193,7 +196,9 @@ class OverviewRenderArea(QtGui.QWidget):
       
       tmax = max([e.totalTime for e in self.entries])
       
+      iEntry = 0
       for entry in self.entries:
+         if iEntry >= numEntries: break
          
          # begin painting
          if self.border != 0:
@@ -229,3 +234,5 @@ class OverviewRenderArea(QtGui.QWidget):
          painter.restore()
          
          painter.translate(0, entryHeight + self.vspace)
+         
+         iEntry += 1
