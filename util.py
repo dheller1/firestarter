@@ -66,6 +66,23 @@ class EntrySettings:
       d.totalTime = 0.
       d.lastPlayed = 0.
       return d
+   
+class SteamEntrySettings:
+   """ Container class for keeping settings specific to a single Steam entry """
+   def __init__(self):
+      self.label = None
+      self.totalTime = None
+      self.iconPath = None
+      self.appid = None
+      
+   @staticmethod
+   def Default():
+      d = SteamEntrySettings()
+      d.label = "Unknown entry"
+      d.totalTime = 0.
+      d.iconPath = ""
+      d.appid = 0
+      return d
 
 class LogHandler:
    """ Abstract base class for an object with logging capabilities.
@@ -166,6 +183,14 @@ class FileParser(LogHandler):
               ('totalTime', float),
               ('lastPlayed', float) ]}
    
+   # dictionary with Steam entry format specifiers, accessed by format version
+   steamEntryFormats = {
+    'Steam_0.1a': [ 
+              ('label', unicode),
+              ('iconFile', unicode),
+              ('totalTime', float),
+              ('appid', int) ]}
+   
    def __init__(self, logEnabled = True):
       LogHandler.__init__(self, logEnabled, 'parser.log')
       
@@ -227,8 +252,13 @@ class FileParser(LogHandler):
          except KeyError:
             raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
             return
+      elif type == 'steam':
+         try: fmt = FileParser.steamEntryFormats[version]
+         except KeyError:
+            raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse Steam entry.' % version)
+            return
       else:
-         raise ValueError('FileParser error: Invalid type argument for ParseByVersion: \'%s\' - must be \'profile\' or \'entry\'!' % type)
+         raise ValueError('FileParser error: Invalid type argument for ParseByVersion: \'%s\' - must be \'profile\', \'entry\' or \'steam\'!' % type)
          return
       
       return self.Parse(file, handler, fmt)
@@ -300,8 +330,13 @@ class FileParser(LogHandler):
          except KeyError:
             raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
             return
+      elif type == 'steam':
+         try: fmt = FileParser.steamEntryFormats[version]
+         except KeyError:
+            raise ValueError('FileParser error: Unknown file version specifier \'%s\'. Unable to parse entry.' % version)
+            return
       else:
-         raise ValueError('FileParser error: Invalid type argument for ParseByVersion: \'%s\' - must be \'profile\' or \'entry\'!' % type)
+         raise ValueError('FileParser error: Invalid type argument for ParseByVersion: \'%s\' - must be \'profile\', \'entry\' or \'steam\'!' % type)
          return
       
       return self.Write(file, handler, fmt)

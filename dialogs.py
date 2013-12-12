@@ -20,10 +20,10 @@ from win32gui_struct import *
 import win32com.client
 usr32 = ctypes.windll.user32
 
-from widgets import IconSizeComboBox, AutoSelectAllLineEdit, OverviewRenderArea
+from widgets import IconSizeComboBox, AutoSelectAllLineEdit, OverviewRenderArea, LibraryListWidget
 from steamapi import SteamApi
 from util import formatTime
-from steamapi import SteamEntry
+from entries import SteamEntry
 
 lastdir = "."
 
@@ -779,21 +779,11 @@ class StatsOverviewDialog(QtGui.QMainWindow):
       self.setWindowTitle(u"Games overview")
       self.resize(645,640) # width 645 magic number
       
-      self.entries = entries
+      games = []
+      games.extend(entries)
+      games.extend(steamGames)
       
-      if steamGames != []:
-         games = []
-         for g in steamGames:
-            se = SteamEntry()
-            se.label = g.name
-            se.totalTime = 60.*g.playtime
-            se.iconFile = "%s_%s.jpg" % (g.appid, g.iconUrl)
-            se.LoadIcon()
-            
-            games.append(se)
-         
-         games.extend(entries)
-         self.entries = sorted(games, key=lambda entry: entry.totalTime, reverse=True)
+      self.entries = sorted(games, key=lambda entry: entry.totalTime, reverse=True)
       
       self.InitLayout()
       self.InitConnections()
@@ -831,3 +821,19 @@ class StatsOverviewDialog(QtGui.QMainWindow):
 #       self.zoomLbl.setText("%i%%" % int(100.*zoom))
 #       self.ra.SetZoom(zoom)
 #       self.ra.repaint()
+
+
+class ManageLibraryDialog(QtGui.QDialog):
+   def __init__(self, entries, parent=None):
+      QtGui.QDialog.__init__(self, parent)
+      self.setWindowTitle("Manage library")
+      
+      self.resize(640,640)
+      
+      lay = QtGui.QVBoxLayout()
+      
+      self.libWdg = LibraryListWidget()
+      self.libWdg.Fill(entries)
+      lay.addWidget(self.libWdg)
+            
+      self.setLayout(lay)

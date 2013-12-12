@@ -66,6 +66,50 @@ class SortModeComboBox(QtGui.QComboBox):
    def SelectManualSorting(self):
       self.setCurrentIndex(0)
       
+class LibraryListWidget(QtGui.QWidget):
+   def __init__(self, parent=None):
+      QtGui.QWidget.__init__(self, parent)
+      
+      self.InitLayout()
+      
+   def InitLayout(self):
+      lay = QtGui.QVBoxLayout()
+      
+      self.table = QtGui.QTableWidget()
+      
+      self.table.verticalHeader().hide()
+      
+      columns = ["", "Name", "from", "Playtime"]
+      self.table.setColumnCount(len(columns))
+      self.table.setHorizontalHeaderLabels(columns)
+      
+      self.table.setColumnWidth(0,20)
+      self.table.setColumnWidth(1,160)
+      self.table.setColumnWidth(2,100)
+      self.table.setColumnWidth(2,100)
+      
+      lay.addWidget(self.table)
+      
+      self.setLayout(lay)
+      
+   def Fill(self, entries):
+      self.table.setRowCount(len(entries))
+      
+      row = 0
+      for e in entries:
+         self.table.setRowHeight(row, 16)
+         
+         twi = QtGui.QTableWidgetItem() # checkbox in tablewidgetitem
+         twi.setFlags(Qt.ItemIsSelectable | Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+         twi.setCheckState(Qt.Checked if not e.isHidden else Qt.Unchecked)
+         twi.setTextAlignment(Qt.AlignHCenter)
+         twi.setToolTip("Uncheck to hide entry")
+         self.table.setItem(row, 0, twi)
+         self.table.setItem(row, 1, QtGui.QTableWidgetItem(e.label))
+         self.table.setItem(row, 2, QtGui.QTableWidgetItem(e.entryType))
+         self.table.setItem(row, 3, QtGui.QTableWidgetItem(formatTime(e.totalTime)))
+         row += 1
+      
 class ToolsToolbar(QtGui.QToolBar):
    def __init__(self, parent=None):
       QtGui.QToolBar.__init__(self, "Tools", parent)

@@ -13,28 +13,11 @@ import xml.parsers.expat
 from util import LogHandler, formatTime
 from PyQt4 import QtGui, QtCore
 
-
 username = 'hasustyle'
 
 class PlayerSummary(object):
    def __init__(self):
       pass
-   
-class SteamEntry(QtCore.QObject):
-   def __init__(self, parentWidget=None):
-      self.icon = None
-      self.loadedIconSize = 32
-      self.iconFile = ""
-      self.label = u"Unknown Steam application"
-      self.totalTime = 0.
-      
-   def LoadIcon(self, iconSize=32):
-      iconPath = os.path.join("cache", "steam", "%s" % self.iconFile)
-      
-      if not os.path.isfile(iconPath):
-         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
-      else:
-         self.icon=QtGui.QIcon(iconPath)
    
 class SteamGameStats:
    def __init__(self, appid, name, playtime, iconUrl=None, logoUrl=None):

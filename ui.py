@@ -5,14 +5,14 @@ Created on 03.01.2013
 @author: heller
 '''
 
-import os, time
+#import os, time
 import ctypes
-import pickle
-import subprocess, threading
+#import pickle
+#import subprocess, threading
 import shutil
 import codecs 
 
-from ctypes import byref
+#from ctypes import byref
 from types import *
 
 from PyQt4 import QtGui, QtCore
@@ -29,142 +29,11 @@ import win32com.client
 
 usr32 = ctypes.windll.user32
 
-from widgets import IconSizeComboBox, ToolsToolbar
+from widgets import ToolsToolbar #IconSizeComboBox
+from entries import *
 from dialogs import *
-from util import din5007, EntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage, stringToFilename
+from util import din5007, EntrySettings, SteamEntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage, stringToFilename
 from steamapi import SteamGameStats
-
-class AppStarterEntry(QtCore.QObject):
-   ManualTracking = pyqtSignal(object)
-   UpdateText = pyqtSignal()
-   UpdateIcon = pyqtSignal()
-   UpdateProfile = pyqtSignal()
-   
-   def __init__(self, path=None, parentWidget=None):
-      QtCore.QObject.__init__(self)
-      self.icon = None
-      self.loadedIconSize = 0
-      self.parentWidget = parentWidget
-      self.preferredIcon = 0
-      self.cmdLineArgs = ""
-      self.totalTime = 0.
-      self.lastPlayed = 0. # seconds since the epoch
-      self.running = False
-      self.label = u"Unknown application"
-      self.position = 0
-      
-      self.currentSessionTime = 0.
-      
-      if path is not None:
-         head, tail = os.path.split(path)
-         
-         self.filename = path
-         self.iconPath = path
-         self.workingDir = head
-         
-         label = tail
-         idx = tail.rfind('.')
-         if idx>-1: label = label[:idx]
-         self.label = label
-         
-   def ExportToFile(self, file):
-      for s in (self.filename, self.workingDir, self.label, self.cmdLineArgs, self.iconPath):
-         file.write(s)
-         file.write('\n')
-      pickle.dump(self.preferredIcon, file)
-      pickle.dump(self.position, file)
-      pickle.dump(self.totalTime, file)
-   
-   def ImportFromFile(self, file):
-      self.filename = file.readline().strip()
-      self.workingDir = file.readline().strip()
-      self.label = file.readline().strip()
-      self.cmdLineArgs = file.readline().strip()
-      self.iconPath = file.readline().strip()
-      #for string in [self.filename, self.workingDir, self.label]:
-      #   string = file.readline().strip()
-      self.preferredIcon = pickle.load(file)
-      self.position = pickle.load(file)
-      self.totalTime = pickle.load(file)
-         
-   def LoadIcon(self, iconSize=256):
-      # No Icon
-      if self.preferredIcon == -1:
-         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
-         return
-      
-      # Load Icon from local icon library
-      elif self.preferredIcon == -2:
-         self.icon=QtGui.QIcon(self.iconPath)
-         return
-      
-      ###ELSE:
-      # determine number of icons
-      numIcons = win32gui.ExtractIconEx(self.iconPath, -1, 1)
-      if(self.preferredIcon >= numIcons): self.preferredIcon = 0
-      
-      if (numIcons == 0):
-         raise IOError("No icons found in file %s!"%self.iconPath)
-         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
-         return
-      
-      hIcon = ctypes.c_int()
-      iconId = ctypes.c_int()
-      
-      # this is used instead of win32gui.ExtractIconEx because we need arbitrarily sized icons
-      res = usr32.PrivateExtractIconsW(ctypes.c_wchar_p(self.iconPath), self.preferredIcon, iconSize,\
-                                       iconSize, byref(hIcon), byref(iconId), 1, 0)
-      if (res == 0):
-         raise IOError("Could not extract %dx%dpx icon from file %s." % (iconSize, iconSize, self.iconPath))
-         self.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
-         return
-      
-      hIcon = hIcon.value # unpack c_int
-      
-      pm = QtGui.QPixmap.fromWinHICON(hIcon)
-      DestroyIcon(hIcon)
-   
-      self.icon = QtGui.QIcon()
-      self.icon.addPixmap(pm)
-      self.loadedIconSize = iconSize
-      
-   def Run(self):
-      if self.running:
-         QtGui.QMessageBox.warning(self.parentWidget, "Warning","Application already running!")
-         return
-      
-      prc = subprocess.Popen([self.filename, self.cmdLineArgs], shell=True, cwd=self.workingDir)
-      self.running = True
-      self.UpdateText.emit()
-      
-      svThread = threading.Thread(target=self.SuperviseProcess, args=(prc,))
-      svThread.start()
-      
-   def SuperviseProcess(self, process):
-      startTime = time.clock()
-      
-      # process supervising loop
-      while(process.poll() is None):
-         runtime = time.clock() - startTime
-         self.currentSessionTime = runtime # atomic, threadsafe
-         self.UpdateText.emit() # threadsafe
-         
-         time.sleep(2.)
-      
-      runtime = time.clock() - startTime
-      
-      if runtime < 10.:
-         # program was probably started as another subprocess:
-         self.ManualTracking.emit(self)
-         
-      self.totalTime += runtime
-      self.lastPlayed = time.time()
-      self.running = False
-      
-      self.UpdateProfile.emit()
-      self.UpdateText.emit()
-      return
-
 
 #class EntryButton(QtGui.QToolButton):
 #   def __init__(self, entry=None, parent=None, iconSize=48):
@@ -265,6 +134,62 @@ class AppStarterEntry(QtCore.QObject):
 #         else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
 #      text = entry.label + "\n" + timeText
 #      self.setText(text)
+
+
+class EntryWidget(QtGui.QWidget):
+   # base class for new-style entry items which are custom widgets instead of ListWidgetItems
+   # and live within a custom widget instead of a certain type of ListWidget
+   def __init__(self, entry=None, parent=None, iconSize=48):
+      QtGui.QWidget.__init__(self, parent)
+      self.InitLayout()
+      
+      self.iconSize = iconSize
+      self.parent = parent
+      self.showPlaytime = True
+      
+      if not entry: return
+      if entry.icon is not None: self.icon = entry.icon
+      self.entry = entry
+      self.UpdateText()
+      
+      self.entry.UpdateText.connect(self.UpdateText)
+      self.entry.UpdateIcon.connect(self.UpdateIcon)
+      
+   def parent(self):
+      return self.parent if self.parent else None
+   
+   def InitLayout(self):
+      lay = QtGui.QVBoxLayout()
+      
+      self.icon = QtGui.QIcon()
+      self.nameLbl = QtGui.QLabel("Unnamed entry")
+      
+      lay.addWidget(self.icon)
+      lay.addWidget(self.nameLbl)
+      
+      self.setLayout(lay)
+      
+   def UpdateIcon(self):
+      self.icon = self.entry.icon
+      
+   def UpdateText(self):
+      entry = self.entry
+      if entry.running: timeText = "Currently running... %s" % formatTime(entry.currentSessionTime)
+      else:
+         if entry.totalTime == 0.: timeText ="Never played"
+         else: 
+            timeText = formatTime(entry.totalTime) + " played"
+            
+            # not enough space for this! only showed in list/details mode (16x16px) currently
+            #timeText += ", last played: " + formatLastPlayed(entry.lastPlayed)
+      
+      if self.showPlaytime:
+         text = entry.label + "\n" + timeText
+      elif entry.running:
+         text = entry.label + " - Currently running..."
+      else: text = entry.label
+      
+      self.nameLbl.setText(text)
       
 class EntryItem(QtGui.QListWidgetItem):
    """ Base class for entry items, independent of whether they are in list or icon view mode """
@@ -1066,7 +991,7 @@ class MainWindow(QtGui.QMainWindow):
    #   pass
    
    def ConnectToSteamProfile(self):
-      # if another connect to steam dialog was canceled and then this routine is called rapidly afterwards,
+      # if another connect to steam dialog was canceled and then this routine is called shortly afterwards,
       # the old query thread might still be active, delaying deletion of the old dialog object and leading
       # to an error when QT cleanup routines want the worker thread to disconnect timers set by the main thread.
       # Thus, wait until the old query has finished.
@@ -1122,7 +1047,12 @@ class MainWindow(QtGui.QMainWindow):
 
                #print "%s: %s" % (g.name, formatTime(60.*g.playtime))
             
-            self.profile.steamGames = gameObjs
+            self.profile.steamGames = []
+            for sgs in gameObjs:
+               se = SteamEntry()
+               se.ImportFromSteamGameStats(sgs)
+               self.profile.steamGames.append(se)
+               
             self.setCursor(Qt.ArrowCursor)
          
          self.SaveProfile()
@@ -1168,12 +1098,21 @@ class MainWindow(QtGui.QMainWindow):
          if pDlg.newProfile:
             self.SaveDefaultProfile(pDlg.profileName)
          return pDlg.profileName
+      
+   def ManageLibrary(self):
+      entries = []
+      entries.extend(self.centralWidget().entries)
+      entries.extend(self.profile.steamGames)
+      
+      dlg = ManageLibraryDialog(entries)
+      dlg.exec_()
    
    def LoadProfile(self, filename=None):
       """ Load profile specified by filename, or by self.profileName if no filename is given.
         Returns True if loading was erroneous, otherwise returns False. """
       bestProfileVersion = '0.1c'
       bestEntryVersion   = '0.1b'
+      bestSteamEntryVersion='Steam_0.1a'
       
       backupProfile = False
       defaultBackup = True # always make a default backup as safety for loading errors
@@ -1235,16 +1174,26 @@ class MainWindow(QtGui.QMainWindow):
          
          for i in range(p.numEntries):
             entryVersion = f.readline().strip() # read file format version
-            if entryVersion not in FileParser.entryFormats:
-               QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for entry in profile '%s'!\nAborting load process." % (entryVersion, filename))
-               raise ValueError('Unsupported file format')
-               return True
             
-            entry = AppStarterEntry(parentWidget=self.centralWidget())
-            eHndlr = EntrySettings()
+            if entryVersion.startswith('Steam'):
+               entryType = 'steam'
+               if entryVersion not in FileParser.steamEntryFormats:
+                  QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for Steam entry in profile '%s'!\nAborting load process." % (entryVersion, filename))
+                  raise ValueError('Unsupported file format')
+                  return True
+               entry = SteamEntry()
+               eHndlr = SteamEntrySettings()
+            else:
+               entryType  = 'entry'
+               if entryVersion not in FileParser.entryFormats:
+                  QtGui.QMessageBox.critical(self, "Profile error", "Unsupported file format (%s) for entry in profile '%s'!\nAborting load process." % (entryVersion, filename))
+                  raise ValueError('Unsupported file format')
+                  return True
+               entry = AppStarterEntry(parentWidget=self.centralWidget())
+               eHndlr = EntrySettings()
             
             try:
-               fp.ParseByVersion(file=f, handler=eHndlr, version=entryVersion, type='entry')
+               fp.ParseByVersion(file=f, handler=eHndlr, version=entryVersion, type=entryType )
             except ValueError as e:
                QtGui.QMessageBox.critical(self, "Profile loading error (entry)", str(e))
                raise ValueError(str(e))
@@ -1254,8 +1203,10 @@ class MainWindow(QtGui.QMainWindow):
                raise EOFError('Incomplete entry')
                return True
             
-            if bestEntryVersion != entryVersion:
-               count = fp.CompleteEntry(eHndlr, bestEntryVersion)
+            if type=='entry' and bestEntryVersion != entryVersion  \
+              or type=='steam' and bestSteamEntryVersion != entryVersion:
+               
+               count = fp.CompleteEntry(eHndlr, bestEntryVersion if type=='entry' else bestSteamEntryVersion)
                backupProfile = True
                if count > 0 and not updateInfoBoxAlreadyShowed:
                   QtGui.QMessageBox.information(self, "Information", "Your profile has been updated to a newer version.\n"\
@@ -1263,32 +1214,41 @@ class MainWindow(QtGui.QMainWindow):
                   updateInfoBoxAlreadyShowed = True
                   
             # copy data from EntrySettings object to actual entry
-            for var, type in FileParser.entryFormats[bestEntryVersion]:
-               setattr(entry, var, getattr(eHndlr, var))
+            if entryType=='entry':
+               for var, vartype in FileParser.entryFormats[bestEntryVersion]:
+                  setattr(entry, var, getattr(eHndlr, var))
+            elif entryType=='steam':
+               for var, vartype in FileParser.steamEntryFormats[bestSteamEntryVersion]:
+                  setattr(entry, var, getattr(eHndlr, var))
             
             failedToLoadIcon = False
             try: entry.LoadIcon(256) # always load largest icon because otherwise we would scale up when increasing icon size at runtime
             except IOError: # ignore icon loading errors, probably just opening the profile on another machine - just show the default icon
                failedToLoadIcon = True
                
-            if entry.preferredIcon != -1 and not failedToLoadIcon:
-               # try to copy and save icon to a local folder in case the icon becomes unavailable in the future
-               pm = entry.icon.pixmap(entry.icon.actualSize(QtCore.QSize(256,256)))
-               
-               iconFilename = stringToFilename(entry.label)
-               i = 0
-               while(os.path.exists(os.path.join("cache", "icons", iconFilename))):
-                  iconFilename = "%s%i" % (stringToFilename(entry.label), i)
+            if entryType =='entry':
+               # preferred icon only for non-steam entries
+               if entry.preferredIcon != -1 and not failedToLoadIcon:
+                  # try to copy and save icon to a local folder in case the icon becomes unavailable in the future
+                  pm = entry.icon.pixmap(entry.icon.actualSize(QtCore.QSize(256,256)))
                   
-               fullName = os.path.join("cache", "icons", iconFilename+".png")
-               pm.save(fullName, "PNG", 100)
-               entry.preferredIcon = -2
-               entry.iconPath = fullName
-            
-            elif failedToLoadIcon:
-               entry.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
+                  iconFilename = stringToFilename(entry.label)
+                  i = 0
+                  while(os.path.exists(os.path.join("cache", "icons", iconFilename))):
+                     iconFilename = "%s%i" % (stringToFilename(entry.label), i)
+                     
+                  fullName = os.path.join("cache", "icons", iconFilename+".png")
+                  pm.save(fullName, "PNG", 100)
+                  entry.preferredIcon = -2
+                  entry.iconPath = fullName
                
-            self.centralWidget().AddEntry(entry, manuallySorted=True) # always add as manually sorted, might be overwritten later
+               elif failedToLoadIcon:
+                  entry.icon=QtGui.QIcon(os.path.join("gfx","noicon.png"))
+               
+               self.centralWidget().AddEntry(entry, manuallySorted=True) # always add as manually sorted, might be overwritten later
+            
+            elif entryType=='steam':
+               p.steamGames.append(entry)
             
       if backupProfile:
          shutil.copy(filename, filename+"."+profileVersion)
@@ -1349,11 +1309,12 @@ class MainWindow(QtGui.QMainWindow):
       codepage = 'utf-8'
       profileVersion = '0.1c'
       entryVersion   = '0.1b'
+      steamEntryVersion='Steam_0.1a'
       
       p = self.profile
       
       p.iconSize = self.centralWidget().iconSize
-      p.numEntries = len(self.centralWidget().entries)
+      p.numEntries = len(self.centralWidget().entries) + len(self.profile.steamGames)
       p.windowSize = (self.size().width(), self.size().height())
       p.windowPos = (self.x(), self.y())
       p.toolsVisible = self.viewMenu.showTools.isChecked()
@@ -1371,6 +1332,10 @@ class MainWindow(QtGui.QMainWindow):
          for entry in self.centralWidget().lastManuallySortedEntries:
             f.write(entryVersion+'\n')# always write file format version first
             fp.WriteByVersion(file=f, handler=entry, version=entryVersion, type='entry')
+            
+         for se in self.profile.steamGames:
+            f.write(steamEntryVersion+'\n')# always write file format version first
+            fp.WriteByVersion(file=f, handler=se, version=steamEntryVersion, type='steam')
          #print "Saved profile in %f seconds." % (time.clock() - startTime)
          
    def SetIconSize(self, size):
@@ -1464,6 +1429,10 @@ class ProfileMenu(QtGui.QMenu):
       
       self.switchAction = QtGui.QAction("S&witch profile", self)
       self.settingsAction = QtGui.QAction("&Settings", self)
+      self.libraryAction = QtGui.QAction("Manage &library", self)
+      
+      self.addAction(self.libraryAction)
+      self.addSeparator()
       self.addAction(self.switchAction)
       self.addAction(self.settingsAction)
       
@@ -1471,6 +1440,7 @@ class ProfileMenu(QtGui.QMenu):
       
    def InitConnections(self):
       self.switchAction.triggered.connect(self.parent().SwitchProfile)
+      self.libraryAction.triggered.connect(self.parent().ManageLibrary)
       
 class FileMenu(QtGui.QMenu):
    def __init__(self, parent=None):
