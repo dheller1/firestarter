@@ -60,25 +60,27 @@ class AppStarterEntry(AbstractEntry):
          if idx>-1: label = label[:idx]
          self.label = label
          
-   def ExportToFile(self, file):
-      for s in (self.filename, self.workingDir, self.label, self.cmdLineArgs, self.iconPath):
-         file.write(s)
-         file.write('\n')
-      pickle.dump(self.preferredIcon, file)
-      pickle.dump(self.position, file)
-      pickle.dump(self.totalTime, file)
-   
-   def ImportFromFile(self, file):
-      self.filename = file.readline().strip()
-      self.workingDir = file.readline().strip()
-      self.label = file.readline().strip()
-      self.cmdLineArgs = file.readline().strip()
-      self.iconPath = file.readline().strip()
-      #for string in [self.filename, self.workingDir, self.label]:
-      #   string = file.readline().strip()
-      self.preferredIcon = pickle.load(file)
-      self.position = pickle.load(file)
-      self.totalTime = pickle.load(file)
+#          --- DEPRECATED, File parser handles this ---
+#    def ExportToFile(self, file):
+#       for s in (self.filename, self.workingDir, self.label, self.cmdLineArgs, self.iconPath):
+#          file.write(s)
+#          file.write('\n')
+#       pickle.dump(self.preferredIcon, file)
+#       pickle.dump(self.position, file)
+#       pickle.dump(self.totalTime, file)
+
+#          --- DEPRECATED, File parser handles this ---   
+#    def ImportFromFile(self, file):
+#       self.filename = file.readline().strip()
+#       self.workingDir = file.readline().strip()
+#       self.label = file.readline().strip()
+#       self.cmdLineArgs = file.readline().strip()
+#       self.iconPath = file.readline().strip()
+#       #for string in [self.filename, self.workingDir, self.label]:
+#       #   string = file.readline().strip()
+#       self.preferredIcon = pickle.load(file)
+#       self.position = pickle.load(file)
+#       self.totalTime = pickle.load(file)
          
    def LoadIcon(self, iconSize=256):
       # No Icon
@@ -126,7 +128,12 @@ class AppStarterEntry(AbstractEntry):
          QtGui.QMessageBox.warning(self.parentWidget, "Warning","Application already running!")
          return
       
-      prc = subprocess.Popen([self.filename, self.cmdLineArgs], shell=True, cwd=self.workingDir)
+      try:
+         prc = subprocess.Popen([self.filename, self.cmdLineArgs], shell=True, cwd=self.workingDir)
+      except WindowsError:
+         QtGui.QMessageBox.critical(self.parentWidget, "Error", "Could not start process. Please check the path and filename:\n\"%s\" %s" % (self.filename, self.cmdLineArgs))
+         return
+      
       self.running = True
       self.UpdateText.emit()
       
@@ -146,7 +153,7 @@ class AppStarterEntry(AbstractEntry):
       
       runtime = time.clock() - startTime
       
-      if runtime < 10.:
+      if runtime < 30.:
          # program was probably started as another subprocess:
          self.ManualTracking.emit(self)
          

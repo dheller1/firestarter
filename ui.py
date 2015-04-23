@@ -10,7 +10,8 @@ import ctypes
 #import pickle
 #import subprocess, threading
 import shutil
-import codecs 
+import codecs
+import sqlite3
 
 #from ctypes import byref
 from types import *
@@ -32,109 +33,8 @@ usr32 = ctypes.windll.user32
 from widgets import ToolsToolbar #IconSizeComboBox
 from entries import *
 from dialogs import *
-from util import din5007, EntrySettings, SteamEntrySettings, ProfileSettings, FileParser, formatTime, formatLastPlayed, openFileWithCodepage, stringToFilename
+from util import din5007, EntrySettings, SteamEntrySettings, ProfileSettings, EntryHistory, FileParser, formatTime, formatLastPlayed, openFileWithCodepage, stringToFilename
 from steamapi import SteamGameStats
-
-#class EntryButton(QtGui.QToolButton):
-#   def __init__(self, entry=None, parent=None, iconSize=48):
-#      QtGui.QToolButton.__init__(self, parent)
-#      
-#      self.iconSize = iconSize
-#      
-#      # init button
-#      self.setAutoRaise(True)
-#      self.setIconSize(QtCore.QSize(self.iconSize,self.iconSize))
-#      self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon if self.iconSize > 16 else Qt.ToolButtonTextBesideIcon)
-#      
-#      # init menu
-#      self.setPopupMode(QtGui.QToolButton.MenuButtonPopup)
-#      
-#      if not entry: return
-#      if entry.icon is not None: self.setIcon(entry.icon)
-#      self.entry = entry
-#      self.UpdateText()
-#      
-#      self.setMenu(EntryMenu(self.entry, self))
-#      
-#      self.clicked.connect(entry.Run)
-#      self.entry.UpdateText.connect(self.UpdateText)
-#
-#   def ChooseIcon(self):
-#      dlg = ChooseIconDialog(self, file=self.entry.filename, suggestions=True)
-#      result = dlg.exec_()
-#      
-#      if result == None: return
-#      else:
-#         path, id = result
-#         self.entry.iconPath = path
-#         self.entry.preferredIcon = id
-#         self.entry.LoadIcon()
-#         self.UpdateIcon()
-#         self.entry.UpdateProfile.emit()
-#
-#   def Rename(self):
-#      entry = self.entry
-#      
-#      text, accepted = QtGui.QInputDialog.getText(self, "Rename %s" % entry.label, "Please enter new name:", text=entry.label)
-#      if accepted:
-#         entry.label = text
-#         self.UpdateText()
-#         self.entry.UpdateProfile.emit()
-#         
-#   def UpdateIcon(self):
-#      self.setIcon(self.entry.icon)
-#      
-#   def UpdateText(self):
-#      entry = self.entry
-#      if entry.running: timeText = "Currently running..."
-#      else:
-#         if entry.totalTime == 0.: timeText ="Never played"
-#         elif entry.totalTime < 60.: timeText = "<1m played"
-#         elif entry.totalTime < 20.*60: timeText = "%im %is played" % (entry.totalTime//60, entry.totalTime%60)
-#         elif entry.totalTime < 60.*60: timeText = "%im played" % (entry.totalTime//60)
-#         elif entry.totalTime < 20.*60*60: timeText = "%ih %im played" %  (entry.totalTime//3600, (entry.totalTime%3600)//60)
-#         elif entry.totalTime < 200.*60*60: timeText = "%ih played" % (entry.totalTime//3600)
-#         else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
-#      text = entry.label + "\n" + timeText
-#      self.setText(text)
-#      
-
-#class EntryListTItem(QtGui.QTableWidgetItem):
-#   def __init__(self, entry=None, parent=None, iconSize=48):
-#      QtGui.QTableWidgetItem.__init__(self)
-#      
-#      self.setTextAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop)
-#      
-#      self.iconSize = iconSize
-#      self.parent = parent
-#      
-#      if not entry: return
-#      if entry.icon is not None: self.setIcon(entry.icon)
-#      self.entry = entry
-#      self.UpdateText()
-#      
-#      self.entry.UpdateText.connect(self.UpdateText)
-#      
-#   def parent(self):
-#      return self.parent if self.parent else None
-#      
-#   def UpdateIcon(self):
-#      self.setIcon(self.entry.icon)
-#      
-#   def UpdateText(self):
-#      entry = self.entry
-#      if entry.running: timeText = "Currently running..."
-#      else:
-#         if entry.totalTime == 0.: timeText ="Never played"
-#         elif entry.totalTime < 60.: timeText = "<1m played"
-#         elif entry.totalTime < 20.*60: timeText = "%im %is played" % (entry.totalTime//60, entry.totalTime%60)
-#         elif entry.totalTime < 60.*60: timeText = "%im played" % (entry.totalTime//60)
-#         elif entry.totalTime < 20.*60*60: timeText = "%ih %im played" %  (entry.totalTime//3600, (entry.totalTime%3600)//60)
-#         elif entry.totalTime < 200.*60*60: timeText = "%ih played" % (entry.totalTime//3600)
-#         else: timeText = "%id %ih played" % (entry.totalTime//86400, (entry.totalTime%86400)//3600)
-#      text = entry.label + "\n" + timeText
-#      self.setText(text)
-
 
 class EntryWidget(QtGui.QWidget):
    # base class for new-style entry items which are custom widgets instead of ListWidgetItems
@@ -270,97 +170,6 @@ class EntryMenu(QtGui.QMenu):
          self.propertiesAction.triggered.connect(self.parent().EditItem)
          self.renameAction.triggered.connect(self.parent().RenameItem)
          self.removeAction.triggered.connect(self.parent().RemoveItem)
-
-#class CategoryTWidget(QtGui.QTableWidget):
-#   ProfileChanged = pyqtSignal()
-#   
-#   def __init__(self, iconSize = 48):
-#      QtGui.QTableWidget.__init__(self, 6, 6)
-#      
-#      # layout/design initialization 
-#      self.iconSize = iconSize
-#      self.contextMenu = EntryMenu(self)
-#      self.count = 0
-#      
-#      self.setVerticalHeaderItem(1, QtGui.QTableWidgetItem(""))
-#      
-#      self.clearSelection()
-#      
-#      style  = "QTableView { background-image: url(gfx/wood-texture.jpg); color: white; background-attachment: fixed; }"\
-#             + "QTableView::item { border: 1px solid rgba(0,0,0,0%); }"\
-#             + "QTableView::item:hover { background: rgba(0,0,0, 18%); border: 1px solid rgba(0,0,0,0%); }"\
-#             + "QTableView::item:selected { background: rgba(0,0,0, 35%); border: 1px solid black; }"
-#      self.setStyleSheet(style)
-#      
-#      # connections
-#      self.itemDoubleClicked.connect(self.RunItem)
-#
-#   def contextMenuEvent(self, e):
-#      lwitem = self.itemAt(e.pos())
-#      if lwitem is not None:
-#         self.contextMenu.exec_(e.globalPos())
-#         
-#   def dropEvent(self, e):
-#      QtGui.QListView.dropEvent(self, e)
-#      
-#      item = self.itemAt(e.pos())
-#      if item is not None:
-#         #newpos = (r.top()/self.gridSize().height(), r.left()/self.gridSize().width())
-#         newpos = ( item.row(), item.col() )
-#         if newpos != item.entry.position:
-#            item.entry.position = newpos
-#            self.ProfileChanged.emit()
-#         
-#   def mousePressEvent(self, e):
-#      if self.itemAt(e.pos()) is None:
-#         self.clearSelection()
-#         
-#      QtGui.QAbstractItemView.mousePressEvent(self, e)
-#
-#   def AddEntry(self, entry):
-#      e = EntryListTItem(entry=entry, parent=self, iconSize=self.iconSize)
-#      
-#      pos = self.count//self.columnCount(), self.count%self.columnCount()
-#      self.setItem(pos[0], pos[1], e)
-#      e.entry.position = pos
-#      
-#      self.count += 1
-#      
-#   def ChooseIconForItem(self):
-#      item = self.currentItem()
-#      if not item: return
-#      dlg = ChooseIconDialog(self, file=item.entry.filename, suggestions=True)
-#      result = dlg.exec_()
-#      
-#      if result == None: return
-#      else:
-#         path, id = result
-#         item.entry.iconPath = path
-#         item.entry.preferredIcon = id
-#         item.entry.LoadIcon()
-#         item.UpdateIcon()
-#         item.entry.UpdateProfile.emit()
-#         
-#   def RemoveItem(self):
-#      item = self.currentItem()
-#      if not item: return
-#      
-#      self.parent().RemoveItemT(item.entry, item.row(), item.column())
-#
-#   def RenameItem(self):
-#      item = self.currentItem()
-#      if not item: return
-#      entry = item.entry
-#      
-#      text, accepted = QtGui.QInputDialog.getText(self, "Rename %s" % entry.label, "Please enter new name:", text=entry.label)
-#      if accepted:
-#         entry.label = text
-#         item.UpdateText()
-#         item.entry.UpdateProfile.emit()
-#         
-#   def RunItem(self,item):
-#      item.entry.Run()
-      
 
 class CategoryWidget(QtGui.QListWidget):
    FirstItemSelected = pyqtSignal()
@@ -1003,7 +812,7 @@ class MainWindow(QtGui.QMainWindow):
       dlg = self.steamConnectDlg = SteamProfileDialog(self)
       result = dlg.exec_()
       if result == QtGui.QDialog.Accepted:
-         if self.profile.steamId != '0':
+         if self.profile.steamId not in ('0', None):
             confirm = QtGui.QMessageBox.question(self, "Please confirm", "This profile is already connected to a Steam account with id"\
                                                  +" <b>%s</b>.\n" % self.profile.steamId\
                                                  + "Do you want to replace the connection with the new account <b>%s</b>?" %dlg.steamId,\
@@ -1294,7 +1103,7 @@ class MainWindow(QtGui.QMainWindow):
          fp.WriteByVersion(file=f, handler=p, version=profileVersion, type='profile')
          # no entries
    
-   def SaveProfile(self, filename=None, DisableAutosave=False):
+   def SaveProfile(self, filename=None, DisableAutosave=False, saveToDb=True):
       """ Save profile to filename or to the current profile name if no filename is specified.
         Use DisableAutosave to disable automatic saving (when closing the program) until the next
         manual save. """
@@ -1313,6 +1122,7 @@ class MainWindow(QtGui.QMainWindow):
       
       p = self.profile
       
+      # update profile to current settings before saving
       p.iconSize = self.centralWidget().iconSize
       p.numEntries = len(self.centralWidget().entries) + len(self.profile.steamGames)
       p.windowSize = (self.size().width(), self.size().height())
@@ -1320,23 +1130,64 @@ class MainWindow(QtGui.QMainWindow):
       p.toolsVisible = self.viewMenu.showTools.isChecked()
       p.sortMode = self.centralWidget().sortMode
       
-      fp = self.fileParser
-      
-      #startTime = time.clock()
-      with codecs.open(filename, 'w', codepage) as f:
-         f.write("# -*- coding: %s -*-\n" % codepage)
+      if not saveToDb:
+         fp = self.fileParser
          
-         f.write(profileVersion+'\n') # always write file format version first
-         fp.WriteByVersion(file=f, handler=p, version=profileVersion, type='profile')
-         
-         for entry in self.centralWidget().lastManuallySortedEntries:
-            f.write(entryVersion+'\n')# always write file format version first
-            fp.WriteByVersion(file=f, handler=entry, version=entryVersion, type='entry')
+         #startTime = time.clock()
+         with codecs.open(filename, 'w', codepage) as f:
+            f.write("# -*- coding: %s -*-\n" % codepage)
             
-         for se in self.profile.steamGames:
-            f.write(steamEntryVersion+'\n')# always write file format version first
-            fp.WriteByVersion(file=f, handler=se, version=steamEntryVersion, type='steam')
-         #print "Saved profile in %f seconds." % (time.clock() - startTime)
+            f.write(profileVersion+'\n') # always write file format version first
+            fp.WriteByVersion(file=f, handler=p, version=profileVersion, type='profile')
+            
+            for entry in self.centralWidget().lastManuallySortedEntries:
+               f.write(entryVersion+'\n')# always write file format version first
+               fp.WriteByVersion(file=f, handler=entry, version=entryVersion, type='entry')
+               
+            for se in self.profile.steamGames:
+               f.write(steamEntryVersion+'\n')# always write file format version first
+               fp.WriteByVersion(file=f, handler=se, version=steamEntryVersion, type='steam')
+            #print "Saved profile in %f seconds." % (time.clock() - startTime)
+      else:
+         try: os.remove('test.sqlite')
+         except: pass
+         db = sqlite3.connect('test.sqlite')
+         c = db.cursor()
+         
+         q = ProfileSettings.CreateTableQuery()
+         try: c.execute(q)
+         except sqlite3.OperationalError as e:
+            print "Error in SQLite3 for Query:\n" + q
+            print "Error message: '%s'" % e
+         
+         q = EntrySettings.CreateTableQuery()
+         try: c.execute(q)
+         except sqlite3.OperationalError as e:
+            print "Error in SQLite3 for Query:\n" + q
+            print "Error message: '%s'" % e
+            
+         q = EntryHistory.CreateTableQuery()
+         try: c.execute(q)
+         except sqlite3.OperationalError as e:
+            print "Error in SQLite3 for Query:\n" + q
+            print "Error message: '%s'" % e
+         
+         q = self.profile.InsertQuery()
+         try: c.execute(q)
+         except sqlite3.OperationalError as e:
+            print "Error in SQLite3 for Query:\n" + q
+            print "Error message: '%s'" % e
+            
+         for entry in self.centralWidget().lastManuallySortedEntries:
+            entrySettings = EntrySettings.FromEntry(entry)
+            q = entrySettings.InsertQuery()
+            try: c.execute(q)
+            except sqlite3.OperationalError as e:
+               print "Error in SQLite3 for Query:\n" + q
+               print "Error message: '%s'" % e
+            
+         db.commit()
+         db.close()
          
    def SetIconSize(self, size):
       self.iconSize = size

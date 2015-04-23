@@ -143,7 +143,7 @@ class SteamApi(LogHandler):
       f.close()
       
       try:
-         xmlString = xml.dom.minidom.parseString(profile.encode('utf-8'))
+         xmlString = xml.dom.minidom.parseString(profile)
       except xml.parsers.expat.ExpatError:
          self._Log("Failed to fetch profile ID after %.2f seconds." % (time.clock()-startTime))
          return None

@@ -1,19 +1,71 @@
 # -*- coding: utf-8 -*-
 
-#
-#  This code is due to Andreas Maier and licensed under the MIT License http://opensource.org/licenses/MIT
-#   http://code.activestate.com/recipes/576507-sort-strings-containing-german-umlauts-in-correct-/
-#
-
 import codecs
-import time, datetime
+import time, datetime, types
 import threading, string
 from types import *
 
 STAMPFORMAT = '(%d.%m.%Y - %H:%M:%S) '
 
+class SqliteDataModel:
+   def __init__(self, tableName, fields, fks):
+      self.tableName = tableName
+      self.fields = fields
+      self.fks = fks
+   
+   def CreateTableQuery(self):
+      lines = ["%s %s" % (col,typ) for col,typ in self.fields]
+      lines.extend(["FOREIGN KEY (%s) REFERENCES %s" % (k,ref) for (k,ref) in self.fks])
+      text = ",\n\t".join(lines)
+      return """ CREATE TABLE %s ( \n\t%s\n ); """ % (self.tableName, text)
+   
+   def InsertQuery(self, **args):
+      columns = []
+      values = []
+      
+      for var in args.keys():
+         # check if field exists
+         valid=False
+         for f in self.fields:
+            if f[0] == var:
+               valid = True
+               
+               columns.append(var)
+            
+               # convert value to fitting format
+               value = args[var]
+               
+               if f[1] == 'TEXT':
+                  value = "'" + unicode(value).replace("'","''") + "'" # escape single quotation marks '
+               elif f[1] == 'INTEGER':
+                  value = str(int(value))
+               elif f[1] == 'REAL':
+                  value = str(float(value))
+               elif f[1] == 'DATE':
+                  value = str(float(value))
+               else:
+                  raise TypeError("Unknown field type '%s' for field '%s'." % (f[1], f[0]))
+                  
+               values.append(value)
+               break
+         
+         if not valid:
+            raise ValueError("Unknown field: %s." % var)
+            continue
+         
+      query = "INSERT INTO %s " % self.tableName
+      query += "(%s)\n" % (", ".join(columns))
+      query += "VALUES (%s);\n" % (", ".join([str(v) for v in values]))
+      return query 
+         
+
 class ProfileSettings:
-   """ Container class for keeping settings saved to or loaded from a profile file """ 
+   Translations = {
+      'sortMode' : { 'manual' : 0, 'title' : 1, 'time' : 2,
+                     0 : 'manual', 1: ' title', 2 : 'time' }
+   }
+   
+   """ Container class for keeping settings saved to or loaded from a profile file """
    def __init__(self):
       # None values are unknown yet
       self.iconSize = None
@@ -28,6 +80,10 @@ class ProfileSettings:
       self.steamGames = []
       
    @staticmethod
+   def CreateTableQuery():
+      return ProfileSettings.GetDm().CreateTableQuery()
+   
+   @staticmethod
    def Default():
       d = ProfileSettings()
       d.iconSize = 128
@@ -39,6 +95,54 @@ class ProfileSettings:
       d.steamId = '0'
       d.steamGames = []
       return d
+   
+   @staticmethod
+   def GetDm():
+      fields = ( ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+        ('name', 'TEXT'),
+        ('iconSize', 'INTEGER'),
+        ('windowSize', 'INTEGER'),
+        ('windowPos', 'INTEGER'),
+        ('toolsVisible', 'INTEGER'),
+        ('sortMode', 'INTEGER'),
+        ('steamId', 'TEXT') )
+      
+      fks = ()
+      
+      dm = SqliteDataModel("ProfileSettings", fields, fks)
+      return dm
+   
+   def InsertQuery(self):
+      return self.GetDm().InsertQuery(name='Unknown', iconSize=self.iconSize, windowSize=hilo(self.windowSize[0],self.windowSize[1]), windowPos=hilo(self.windowPos[0],self.windowPos[1]),
+            toolsVisible=self.toolsVisible, steamId=self.steamId, sortMode=ProfileSettings.Translations['sortMode'][self.sortMode])
+   
+class EntryHistory:
+   """ Container class for playing history of a single entry.
+       Each object contains a date, playing time for that date
+       and the corresponding entry id. """
+   def __init__(self):
+      self.entryId = None
+      self.date = None
+      self.playtime = None
+      
+   @staticmethod
+   def CreateTableQuery():
+      fields = ( ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+        ('entryId', 'INTEGER'), # FK
+        ('date', 'DATE'),
+        ('playtime', 'REAL') )
+      
+      fks = ( ('entryId', 'Entries(id)'), )
+      
+      dm = SqliteDataModel("EntryHistories", fields, fks)
+      return dm.CreateTableQuery()
+      
+   @staticmethod
+   def Default():
+      d = EntryHistory()
+      d.entryId = 0
+      d.date = 0
+      d.playtime = 0.
 
 class EntrySettings:
    """ Container class for keeping settings specific to a single entry """
@@ -54,6 +158,10 @@ class EntrySettings:
       self.lastPlayed = None
       
    @staticmethod
+   def CreateTableQuery():
+      return EntrySettings.GetDm().CreateTableQuery()
+      
+   @staticmethod
    def Default():
       d = EntrySettings()
       d.filename = ""
@@ -66,6 +174,44 @@ class EntrySettings:
       d.totalTime = 0.
       d.lastPlayed = 0.
       return d
+   
+   @staticmethod
+   def FromEntry(e):
+      es = EntrySettings()
+      es.filename = e.filename
+      es.workingDir = e.workingDir
+      es.label = e.label
+      es.cmdLineArgs = e.cmdLineArgs
+      es.iconPath = e.iconPath
+      es.preferredIcon = e.preferredIcon
+      es.position = e.position
+      es.totalTime = e.totalTime
+      es.lastPlayed = e.lastPlayed
+      return es
+   
+   @staticmethod
+   def GetDm():
+      fields = ( ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+        ('label', 'TEXT'),
+        ('icon', 'INTEGER'), # FK
+        ('entryType', 'INTEGER'), # FK
+        ('isHidden', 'BOOLEAN'),
+        ('totalTime', 'REAL'),
+        ('lastPlayed', 'DATE'),
+        ('executable', 'TEXT'),
+        ('workingDir', 'TEXT'),
+        ('cmdLineArgs', 'TEXT') )
+      
+      fks = ( ('icon', 'Icons(id)'),
+              ('entryType', 'EntryTypes(id)') )
+      
+      dm = SqliteDataModel("Entries", fields, fks)
+      return dm
+      
+   def InsertQuery(self):
+      return self.GetDm().InsertQuery(label = self.label, totalTime = self.totalTime, lastPlayed = self.lastPlayed, executable = self.filename, workingDir = self.workingDir,
+                                      cmdLineArgs = self.cmdLineArgs )
+   
    
 class SteamEntrySettings:
    """ Container class for keeping settings specific to a single Steam entry """
@@ -423,8 +569,14 @@ def formatTime(time, escapeLt=False):
    elif time < 20.*60: return "%im %is" % (time//60, time%60)
    elif time < 60.*60: return "%im" % (time//60)
    elif time < 20.*60*60: return "%ih %im" %  (time//3600, (time%3600)//60)
-   elif time < 200.*60*60: return "%ih" % (time//3600)
-   else: return "%id %ih" % (time//86400, (time%86400)//3600)
+   else: return "%ih" % (time//3600)
+   #elif time < 200.*60*60: return "%ih" % (time//3600)
+   #else: return "%id %ih" % (time//86400, (time%86400)//3600)
+   
+def hilo(short1, short2):
+   # Purpose: Packs two 2-byte short integers into one 4-byte integer.
+   # Make sure dimensions fit when calling this.
+   return short1 << 2*8 | short1
    
 def openFileWithCodepage(filename, mode='r'):
    """ Opens a file general, reads its codepage, opens it again with the correct codepage,
@@ -468,6 +620,10 @@ def openFileWithCodepage(filename, mode='r'):
       raise ValueError('Unsupported file opening mode: %s' % mode)
       return None
 
+#
+#  This code is due to Andreas Maier and licensed under the MIT License http://opensource.org/licenses/MIT
+#   http://code.activestate.com/recipes/576507-sort-strings-containing-german-umlauts-in-correct-/
+#
 def din5007(input):
    """ This function implements sort keys for the german language according to 
    DIN 5007."""
@@ -488,5 +644,8 @@ def din5007(input):
    return (key1, key2)
 
 def stringToFilename(s):
+   """ Convert an arbitrary string into a filename by omitting every character
+     which is forbidden for a file (everything except ascii letters, digits,
+     and the special characters -_.() as well as a blank/space) """
    validChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
    return ''.join(char for char in s if char in validChars)

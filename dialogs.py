@@ -837,3 +837,8 @@ class ManageLibraryDialog(QtGui.QDialog):
       lay.addWidget(self.libWdg)
             
       self.setLayout(lay)
+      
+   def exec_(self):
+      QtGui.QDialog.exec_(self)
+      
+      print self.libWdg.modifications

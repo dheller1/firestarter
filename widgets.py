@@ -67,32 +67,36 @@ class SortModeComboBox(QtGui.QComboBox):
       self.setCurrentIndex(0)
       
 class LibraryListWidget(QtGui.QWidget):
+   """
+      Widget listing the whole library of a profile (including Steam games) in a table.
+      Entries can be modified, these modifications are stored temporarily and only made
+      effective when accepting the parent dialog.
+   """
+   
+   
+   """ BUG: Undo/Redo bugged, as code-generated changes in the table also trigger the
+         itemChanged() signal.
+   """
    def __init__(self, parent=None):
       QtGui.QWidget.__init__(self, parent)
       
+      self.modifications = [] # list of modifications to entries which can be applied when clicking 'Apply' or 'OK' in parent dialog
+      self.redoQueue = []
       self.InitLayout()
       
-   def InitLayout(self):
-      lay = QtGui.QVBoxLayout()
+      self.InitConnections()
       
-      self.table = QtGui.QTableWidget()
+   def AppendModification(self, changedItem):
+      row, col = changedItem.row(), changedItem.column()
       
-      self.table.verticalHeader().hide()
-      
-      columns = ["", "Name", "from", "Playtime"]
-      self.table.setColumnCount(len(columns))
-      self.table.setHorizontalHeaderLabels(columns)
-      
-      self.table.setColumnWidth(0,20)
-      self.table.setColumnWidth(1,160)
-      self.table.setColumnWidth(2,100)
-      self.table.setColumnWidth(2,100)
-      
-      lay.addWidget(self.table)
-      
-      self.setLayout(lay)
-      
+      if col == 0: # show/hide toggled
+         checked = (changedItem.checkState() == Qt.Checked)
+         self.modifications.append( ("toggleVisibility", row) )
+      elif col == 1: # name changed
+         self.modifications.append( ("rename", row, unicode(changedItem.text())))
+
    def Fill(self, entries):
+      self.entries = entries
       self.table.setRowCount(len(entries))
       
       row = 0
@@ -109,6 +113,77 @@ class LibraryListWidget(QtGui.QWidget):
          self.table.setItem(row, 2, QtGui.QTableWidgetItem(e.entryType))
          self.table.setItem(row, 3, QtGui.QTableWidgetItem(formatTime(e.totalTime)))
          row += 1
+         
+      # connect only after filling list, otherwise the initialization
+      # would be registered as changes already
+      self.table.itemChanged.connect(self.AppendModification)
+      
+   def InitConnections(self):
+      self.undoBtn.clicked.connect(self.Undo)
+      self.redoBtn.clicked.connect(self.Redo)
+
+   def InitLayout(self):
+      lay = QtGui.QHBoxLayout()
+      btnLay = QtGui.QVBoxLayout()
+      
+      self.table = QtGui.QTableWidget()
+      self.table.verticalHeader().hide()
+      
+      columns = ["", "Name", "from", "Playtime"]
+      self.table.setColumnCount(len(columns))
+      self.table.setHorizontalHeaderLabels(columns)
+      
+      self.table.setColumnWidth(0,20)
+      self.table.setColumnWidth(1,160)
+      self.table.setColumnWidth(2,100)
+      self.table.setColumnWidth(2,100)
+      
+      self.undoBtn = QtGui.QPushButton()
+      self.undoBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "edit-undo.png")))
+      self.undoBtn.setToolTip("Undo")
+      self.redoBtn = QtGui.QPushButton()
+      self.redoBtn.setIcon(QtGui.QIcon(os.path.join("gfx", "edit-redo.png")))
+      self.redoBtn.setToolTip("Redo")
+      
+      btnLay.addWidget(self.undoBtn)
+      btnLay.addWidget(self.redoBtn)
+      btnLay.addStretch()
+      
+      lay.addWidget(self.table)
+      lay.addLayout(btnLay)
+      
+      self.setLayout(lay)
+      
+   def Redo(self):
+      if len(self.redoQueue) == 0: return
+      
+      redoMod = self.redoQueue.pop()
+      
+      cmd, row = redoMod[0], redoMod[1]
+      
+      if cmd=="rename":
+         self.table.item(row,1).setText(redoMod[2])
+      
+      elif cmd=="toggleVisibility":
+         itm = self.table.item(row,0)
+         if itm.checkState() == Qt.Checked: itm.setCheckState(Qt.Unchecked)
+         elif itm.checkState() == Qt.Unchecked: itm.setCheckState(Qt.Checked)
+      
+   def Undo(self):
+      if len(self.modifications) == 0: return
+      
+      lastMod = self.modifications.pop()
+      self.redoQueue.append(lastMod)
+      
+      cmd, row = lastMod[0], lastMod[1]
+      
+      if cmd=="rename":
+         self.table.item(row,1).setText(self.entries[row].label)
+      
+      elif cmd=="toggleVisibility":
+         itm = self.table.item(row,0)
+         if itm.checkState() == Qt.Checked: itm.setCheckState(Qt.Unchecked)
+         elif itm.checkState() == Qt.Unchecked: itm.setCheckState(Qt.Checked)
       
 class ToolsToolbar(QtGui.QToolBar):
    def __init__(self, parent=None):
