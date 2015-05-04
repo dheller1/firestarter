@@ -13,8 +13,6 @@ import xml.parsers.expat
 from util import LogHandler, formatTime
 from PyQt4 import QtGui, QtCore
 
-username = 'hasustyle'
-
 class PlayerSummary(object):
    def __init__(self):
       pass
@@ -158,17 +156,3 @@ class SteamApi(LogHandler):
       self._Log("Received profile ID %i after %.2f seconds." % (id, time.clock()-startTime))
       
       return id
-   
-   
-# a = SteamApi()
-# games = a.GetOwnedGames("76561197968959644")
-# 
-# gameObjs = []
-# for g in games:
-#    if "playtime_forever" in g and g["playtime_forever"] > 0:
-#       gameObj = SteamGameStats(g["appid"], g["name"], g["playtime_forever"], g["img_icon_url"], g["img_logo_url"])
-#       gameObjs.append(gameObj)
-#       
-# for g in gameObjs:
-#    print "%s: %s" % (g.name, formatTime(60.*g.playtime))
-#    print "http://media.steampowered.com/steamcommunity/public/images/apps/%s/%s.jpg" % (g.appid, g.logoUrl)

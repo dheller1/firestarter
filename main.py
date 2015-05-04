@@ -12,13 +12,15 @@ from PyQt4 import QtGui
 from util import flushLogfiles
 
 def pidRunning(pid):
-   '''Check For the existence of a pid.'''
+   '''Check for the existence of a process id.'''
    wmi = win32com.client.GetObject('winmgmts:')
    prc = wmi.ExecQuery('Select * from win32_process where ProcessId=%s' % pid)
    return (len(prc)>0)
 
 def main():
+   #============================================================================
    # check if the program is already running
+   #============================================================================
    pid = str(os.getpid())
    pidfile = "~firestarter.pid"
    
@@ -34,12 +36,17 @@ def main():
    else:
       with open(pidfile, 'w') as pf: pf.write(pid)
       
+   #============================================================================
    # verify directory structure
+   #============================================================================
    neededFolders = ("cache", "cache/icons", "cache/steam", "export")
    for folder in neededFolders:
       if not os.path.isdir(folder):
          os.makedirs(folder)
 
+   #============================================================================
+   # Start main program
+   #============================================================================
    ret = MainWindow.RestartCode
    while ret == MainWindow.RestartCode:
       flushLogfiles(("parser.log","steamapi.log"), 'utf-8')
@@ -54,7 +61,9 @@ def main():
       del mainWnd
       del app
 
+   #============================================================================
    # cleanup and exit
+   #============================================================================
    os.remove(pidfile)
    sys.exit(ret)
    

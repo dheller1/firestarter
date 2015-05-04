@@ -916,7 +916,7 @@ class MainWindow(QtGui.QMainWindow):
       dlg = ManageLibraryDialog(entries)
       dlg.exec_()
    
-   def LoadProfile(self, filename=None):
+   def LoadProfile(self, filename=None, loadFromDb=True):
       """ Load profile specified by filename, or by self.profileName if no filename is given.
         Returns True if loading was erroneous, otherwise returns False. """
       bestProfileVersion = '0.1c'
@@ -1087,6 +1087,9 @@ class MainWindow(QtGui.QMainWindow):
       with codecs.open('lastprofile', 'w', codepage) as f:
          f.write("# -*- coding: %s -*-\n" % codepage)
          f.write(filename)
+         
+      # update window title
+      self.setWindowTitle(os.path.splitext(filename)[0] + " - FireStarter")
       
       return False
    
@@ -1166,6 +1169,12 @@ class MainWindow(QtGui.QMainWindow):
             print "Error in SQLite3 for Query:\n" + q
             print "Error message: '%s'" % e
             
+         q = SteamEntrySettings.CreateTableQuery()
+         try: c.execute(q)
+         except sqlite3.OperationalError as e:
+            print "Error in SQLite3 for Query:\n" + q
+            print "Error message: '%s'" % e
+            
          q = EntryHistory.CreateTableQuery()
          try: c.execute(q)
          except sqlite3.OperationalError as e:
@@ -1180,6 +1189,14 @@ class MainWindow(QtGui.QMainWindow):
             
          for entry in self.centralWidget().lastManuallySortedEntries:
             entrySettings = EntrySettings.FromEntry(entry)
+            q = entrySettings.InsertQuery()
+            try: c.execute(q)
+            except sqlite3.OperationalError as e:
+               print "Error in SQLite3 for Query:\n" + q
+               print "Error message: '%s'" % e
+         
+         for se in self.profile.steamGames:
+            entrySettings = SteamEntrySettings.FromSteamEntry(se)
             q = entrySettings.InsertQuery()
             try: c.execute(q)
             except sqlite3.OperationalError as e:

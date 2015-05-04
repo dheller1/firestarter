@@ -7,6 +7,10 @@ from types import *
 
 STAMPFORMAT = '(%d.%m.%Y - %H:%M:%S) '
 
+FIRESTARTER_ENTRY    = 1
+STEAM_ENTRY          = 2
+MANUAL_ENTRY         = 3
+
 class SqliteDataModel:
    def __init__(self, tableName, fields, fks):
       self.tableName = tableName
@@ -37,7 +41,7 @@ class SqliteDataModel:
                
                if f[1] == 'TEXT':
                   value = "'" + unicode(value).replace("'","''") + "'" # escape single quotation marks '
-               elif f[1] == 'INTEGER':
+               elif f[1] in ('INTEGER', 'BOOLEAN'):
                   value = str(int(value))
                elif f[1] == 'REAL':
                   value = str(float(value))
@@ -105,7 +109,8 @@ class ProfileSettings:
         ('windowPos', 'INTEGER'),
         ('toolsVisible', 'INTEGER'),
         ('sortMode', 'INTEGER'),
-        ('steamId', 'TEXT') )
+        ('steamId', 'TEXT'),
+        ('lastUpdate', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP') )
       
       fks = ()
       
@@ -156,6 +161,7 @@ class EntrySettings:
       self.position = None
       self.totalTime = None
       self.lastPlayed = None
+      self.isHidden = False
       
    @staticmethod
    def CreateTableQuery():
@@ -173,6 +179,7 @@ class EntrySettings:
       d.position = 0
       d.totalTime = 0.
       d.lastPlayed = 0.
+      d.isHidden = False
       return d
    
    @staticmethod
@@ -187,6 +194,7 @@ class EntrySettings:
       es.position = e.position
       es.totalTime = e.totalTime
       es.lastPlayed = e.lastPlayed
+      es.isHidden = e.isHidden
       return es
    
    @staticmethod
@@ -194,23 +202,22 @@ class EntrySettings:
       fields = ( ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
         ('label', 'TEXT'),
         ('icon', 'INTEGER'), # FK
-        ('entryType', 'INTEGER'), # FK
         ('isHidden', 'BOOLEAN'),
         ('totalTime', 'REAL'),
         ('lastPlayed', 'DATE'),
         ('executable', 'TEXT'),
         ('workingDir', 'TEXT'),
-        ('cmdLineArgs', 'TEXT') )
+        ('cmdLineArgs', 'TEXT'),
+        ('lastUpdate', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP') )
       
-      fks = ( ('icon', 'Icons(id)'),
-              ('entryType', 'EntryTypes(id)') )
+      fks = ( ('icon', 'Icons(id)'), )
       
       dm = SqliteDataModel("Entries", fields, fks)
       return dm
       
    def InsertQuery(self):
       return self.GetDm().InsertQuery(label = self.label, totalTime = self.totalTime, lastPlayed = self.lastPlayed, executable = self.filename, workingDir = self.workingDir,
-                                      cmdLineArgs = self.cmdLineArgs )
+                                      cmdLineArgs = self.cmdLineArgs, isHidden = self.isHidden )
    
    
 class SteamEntrySettings:
@@ -220,6 +227,11 @@ class SteamEntrySettings:
       self.totalTime = None
       self.iconPath = None
       self.appid = None
+      self.isHidden = None
+      
+   @staticmethod
+   def CreateTableQuery():
+      return SteamEntrySettings.GetDm().CreateTableQuery()
       
    @staticmethod
    def Default():
@@ -228,7 +240,36 @@ class SteamEntrySettings:
       d.totalTime = 0.
       d.iconPath = ""
       d.appid = 0
+      d.isHidden = True
       return d
+   
+   @staticmethod
+   def FromSteamEntry(e):
+      ses = SteamEntrySettings()
+      ses.label = e.label
+      ses.totalTime = e.totalTime
+      ses.appid = e.appid
+      ses.isHidden = e.isHidden
+      return ses
+   
+   @staticmethod
+   def GetDm():
+      fields = ( ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+        ('label', 'TEXT'),
+        ('icon', 'INTEGER'), # FK
+        ('totalTime', 'REAL'),
+        ('appid', 'INTEGER'),
+        ('isHidden', 'BOOLEAN'),
+        ('lastUpdate', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP') )
+      
+      fks = ( ('icon', 'Icons(id)'), )
+      
+      dm = SqliteDataModel("SteamEntries", fields, fks)
+      return dm
+   
+   def InsertQuery(self):
+      return self.GetDm().InsertQuery(label = self.label, totalTime = self.totalTime, appid = self.appid, isHidden = self.isHidden )
+      
 
 class LogHandler:
    """ Abstract base class for an object with logging capabilities.
@@ -576,10 +617,14 @@ def formatTime(time, escapeLt=False):
 def hilo(short1, short2):
    # Purpose: Packs two 2-byte short integers into one 4-byte integer.
    # Make sure dimensions fit when calling this.
-   return short1 << 2*8 | short1
+   return short1 << 16 | short2
+
+def unhilo(long1):
+   # Purpose: Unpacks two 2-byte short integers from the high/low bits of one 4-byte integer.
+   return (long1 >> 16, long1 & (2**16-1)) 
    
 def openFileWithCodepage(filename, mode='r'):
-   """ Opens a file general, reads its codepage, opens it again with the correct codepage,
+   """ Opens a file normally, reads its codepage, opens it again with the correct codepage,
      skips the codepage (if reading) / writes the codepage (if writing), and returns the
      file object """
       

@@ -259,7 +259,7 @@ class OverviewRenderArea(QtGui.QWidget):
       self.vspace = 5
       self.border = 1
       
-      self.numEntries = 20
+      self.numEntries = 25
       
       entryWidth = self.zoom * (600+2*self.margin + self.vspace + 2*self.border)
       self.setMinimumSize(entryWidth + 2*self.vspace, 40)
